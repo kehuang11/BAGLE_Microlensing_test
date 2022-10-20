@@ -6,8 +6,8 @@ channels:
     - defaults
 
 dependencies:
-    - ipywidgets==7.6
-    - viola==0.3.0
+    - ipywidgets
+    - viola
     - python
     - astropy
     - numpydoc 
