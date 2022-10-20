@@ -9,3 +9,5 @@ Pyerfa
 dynesty
 joblib
 jplephem
+voila
+ipywidgets
