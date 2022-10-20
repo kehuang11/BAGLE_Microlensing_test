@@ -319,6 +319,8 @@ All times must be reported in MJD.
 
 """
 
+from signal import default_int_handler
+import ipywidgets as widgets
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import inspect
@@ -1172,6 +1174,193 @@ class PSPL_PhotAstromParam1(PSPL_Param):
         self.tE = (self.thetaE_amp / self.muRel_amp) * days_per_year
 
         return
+    
+    def interact(self, tE, time_steps, size, zoom, range_dict=None):
+
+        def updateHelper(mL, t0, beta, dL, dL_dS, xS0_E, xS0_N, muL_E, muL_N, muS_E, muS_N, b_sff, mag_src, raL, decL):
+            dS = dL / dL_dS
+            xS0 = np.array([xS0_E, xS0_N])
+            muL = np.array([muL_E, muL_N])
+            muS = np.array([muS_E, muS_N])
+            #self.raL = raL
+            #self.decL = decL
+            #super().__init__()
+            mag_base = mag_src + 2.5 * np.log10(b_sff)
+            # Calculate the relative parallax
+            inv_dist_diff = (1.0 / (dL * units.pc)) - (1.0 / (dS * units.pc))
+            piRel = units.rad * units.au * inv_dist_diff
+            piRel = piRel.to('mas').value
+            # Calculate the individual parallax
+            piS = (1.0 / dS) * (units.rad * units.au / units.pc)
+            piL = (1.0 / dL) * (units.rad * units.au / units.pc)
+            piS = piS.to('mas').value
+            piL = piL.to('mas').value
+            # Calculate the relative proper motion vector.
+            # Note that this will be in the direction of theta_hat
+            muRel = muS - muL
+            muRel_E, muRel_N = muRel
+            muRel_amp = np.linalg.norm(muRel)  # mas/yr
+            #muS_E, muS_N = muS
+            #muL_E, muL_N = muL
+            
+            # Calculate the Einstein radius
+            thetaE = units.rad * np.sqrt(
+                (4.0 * const.G * mL * units.M_sun / const.c ** 2) * inv_dist_diff)
+            thetaE_amp = thetaE.to('mas').value  # mas
+            thetaE_hat = muRel / muRel_amp
+            muRel_hat = thetaE_hat
+            thetaE = thetaE_amp * thetaE_hat
+            thetaE_E, thetaE_N = thetaE
+            u0_hat = u0_hat_from_thetaE_hat(thetaE_hat, beta)
+            u0_amp = beta / thetaE_amp  # in Einstein units
+            u0 = np.abs(u0_amp) * u0_hat
+            thetaS0 = u0 * thetaE_amp  # mas
+            xL0 = xS0 - (thetaS0 * 1e-3)
+            piE_amp = piRel / thetaE_amp
+            piE = piE_amp * thetaE_hat
+            piE_E, piE_N = piE
+
+            # Calculate the Einstein crossing time. (days)
+            self_tE = (thetaE_amp / muRel_amp) * days_per_year
+
+            ## replotting the graph.. based on updated values..
+            times = np.array(range(-time_steps, time_steps + 1, 1))
+            tau = tE * times / (-times[0])
+            t = t0 + (tau * self_tE)
+            
+            magnification = self.get_amplification(t, t0, self_tE, u0, thetaE_hat, piE_amp, raL, decL)
+            #rA = self.get_resolved_amplification(t, t0, thetaS0, muRel, thetaE_amp)
+            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
+
+            source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
+            #get_astrometry_unlensed(self, t_obs, t0=None, xS0=[], muS=[], piS=None, raL=None, decL=None)
+            ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
+            #get_resolved_astrometry(self, t_obs, t0=None, thetaS0=[], muRel=None, thetaE_amp=None, xL0=[], muL=[], piL=[], *piRel=None,  *raL=None, *decL=None,):
+            lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
+            #self.get_lens_astrometry(t_obs, t0=t0, xL0=xL0, muL=muL, piL=piL, raL=raL, decL=decL)
+            astrometry = self.get_astrometry(t, t0, self_tE, xS0, muS, thetaE_hat, thetaE_amp, u0, u0_amp, piS, thetaS0, muRel, piRel, raL, decL)
+            #get_astrometry(self, t_obs, t0=None, tE=None, xS0=[], muS=[], thetaE_hat=None, thetaE_amp=None, u0=None, u0_amp=None, piS=None, thetaS0=None, muRel=None, piRel=None, raL=None, decL=None, ast_filt_idx=0):
+            return [source, lens, ri, astrometry, tau, magnification]
+
+        times = np.array(range(-time_steps, time_steps + 1, 1))
+        tau = tE * times / (-times[0])
+        t = self.t0 + (tau * self.tE)
+        A = self.get_amplification(t)
+        rA = self.get_resolved_amplification(t)
+        #aplus = rA[0]
+        #aminus = rA[1]
+        rs = self.get_astrometry_unlensed(t)
+        ri = self.get_resolved_astrometry(t)
+        plus = ri[0]
+        minus = ri[1]
+        l = self.get_lens_astrometry(t)
+
+        # Setup the alpha for the lensed source images.
+        #aplus_alpha = (0.5 * (aplus - 1) / (aplus.max() - 1)) + 0.5
+        #aminus_alpha = (0.5 * (aminus - 1) / (aplus.max() - 1)) + 0.5
+
+        # sets up the figure
+        fig = plt.figure(figsize=[size[0], size[1] + 0.5])
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax2 = fig.add_subplot(2, 1, 2)
+        fig.subplots_adjust(hspace=.5)
+
+        s_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Source",
+                            color='gold', linewidth=2)
+        s_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='gold', linewidth=2)
+        l_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Lens",
+                            color='black', linewidth=2)
+        l_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='black', linewidth=2)
+        p_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Lensed Source Images",
+                            color='coral', linewidth=2)
+        p_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='coral', linewidth=2)
+        m_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
+                            color='coral', linewidth=2)
+        m_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='coral', linewidth=2)
+
+        dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
+        ax1.set_xlabel('RA (")')
+        ax1.set_ylabel('Dec (")')
+        ax1.set_xlim(
+            (l[0][0] + l[-1][0]) / 2 - 2 * (size[0]) / (2 * size[1]) * (
+                    l[-1][1] - l[0][
+                1] + 2 * zoom * self.thetaE_amp * 1e-3),
+            (l[0][0] + l[-1][0]) / 2 + 2 * (size[0]) / (2 * size[1]) * (
+                    l[-1][1] - l[0][
+                1] + 2 * zoom * self.thetaE_amp * 1e-3))
+        
+        ax1.set_ylim(-dec_lim, dec_lim)
+            
+        #a = self.get_astrometry(t)
+        u_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
+                            color='red', linewidth=2,
+                            label="Unresolved Astrometry")
+        u_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='red', linewidth=2)
+        mag_line, = ax2.plot(tau, A, color='red', linewidth=2)
+        ax1.legend(fontsize=12, loc='upper right')
+        ax2.set_xlabel("Time (tE)")
+        ax2.set_ylabel("Magnification")
+
+        line = [s_line1, s_line2, l_line1, l_line2,
+                p_line1, p_line2, m_line1, m_line2,
+                u_line1, u_line2, mag_line] 
+
+        def update(mL, t0, beta, dL, dL_dS, xS0_E, xS0_N, muL_E, muL_N, muS_E, muS_N, b_sff, mag_src, raL, decL):
+            
+            source, lens, ri, astrometry, tau, magnification = updateHelper(mL, t0, beta, dL, dL_dS, xS0_E, xS0_N, muL_E, muL_N, muS_E, muS_N, b_sff, mag_src, raL, decL)
+            i = len(tau)-1
+            plus = ri[0]
+            minus = ri[1]
+            dS = dL / dL_dS
+            inv_dist_diff = (1.0 / (dL * units.pc)) - (1.0 / (dS * units.pc))
+            thetaE = units.rad * np.sqrt((4.0 * const.G * mL * units.M_sun / const.c ** 2) * inv_dist_diff)
+            thetaE_amp = thetaE.to('mas').value  # mas
+
+            line[0].set_data(source[i, 0], source[i, 1])
+            line[1].set_data(source[:i + 1, 0], source[:i + 1, 1])
+            line[2].set_data(lens[i, 0], lens[i, 1])
+            line[3].set_data(lens[:i + 1, 0], lens[:i + 1, 1])
+            line[4].set_data(plus[i, 0], plus[i, 1])
+            line[5].set_data(plus[:i + 1, 0], plus[:i + 1, 1]) #unresolved astronometry
+            line[6].set_data(minus[i, 0], minus[i, 1]) #dot
+            line[7].set_data(minus[:i + 1, 0], minus[:i + 1, 1]) #lens sourced image (resolved astrometry)
+            line[8].set_data(astrometry[i, 0], astrometry[i, 1]) # unresolved astronometry
+            line[9].set_data(astrometry[:i + 1, 0], astrometry[:i + 1, 1])
+            line[10].set_data(tau[:i + 1], magnification[:i + 1])
+
+            title_fmt = r'm$_L$={0:.1f} M$_\odot$, d$_L$={1:.0f} pc, d$_S$={2:.0f} pc '
+            title_fmt += r'$\theta_E$={3:.1f} mas, t$_E$={4:.0f} days'
+            ax1.set_title(title_fmt.format(mL, dL, dS,
+                                    thetaE_amp, tE), fontsize=12)
+
+        if range_dict == None:
+            range_dict=dict()
+            
+        default_map = {"mL": self.mL, "t0": self.t0, "beta": self.beta, "dL": self.dL, "dL_dS": self.dL_dS, "xS0_E": self.xS0[0], "xS0_N": self.xS0[1], "muL_E": self.muL[0], "muL_N": self.muL[1], "muS_E": self.muS[0], "muS_N": self.muS[1], "b_sff": self.b_sff[0], "mag_src": self.mag_src[0], "raL": self.raL, "decL": self.decL}
+        sliders_list = dict()
+        for key in default_map.keys():
+            default_value = default_map[key] or 0
+            range_dict.setdefault(key, (min(default_value,0), max(default_value,0), 0.1)) #sets key to default if key not in range_dict
+            curr_slider = widgets.FloatSlider(description=key, value=default_value, min=range_dict[key][0], max=range_dict[key][1], step = range_dict[key][2])
+            if curr_slider.min == curr_slider.max:
+                curr_slider.disabled = True
+            if default_map[key] == None:
+                curr_slider.disabled = True
+            sliders_list[key] = curr_slider
+
+        ui_col_1 = widgets.VBox([sliders_list["mL"],sliders_list["dL"],sliders_list["xS0_E"],sliders_list["muL_E"], sliders_list["muS_E"],sliders_list["b_sff"]])
+        ui_col_2 = widgets.VBox([sliders_list["t0"],sliders_list["dL_dS"], sliders_list["xS0_N"], sliders_list["muL_N"], sliders_list["muS_N"], sliders_list["mag_src"]])
+        ui_col_3 = widgets.VBox([sliders_list["beta"], sliders_list["raL"], sliders_list["decL"] ])
+        ui_row_1 = widgets.HBox([ui_col_1,ui_col_2,ui_col_3])
+
+        out = widgets.interactive_output(update, sliders_list)
+        
+        display(ui_row_1, out)
 
 
 class PSPL_PhotAstromParam2(PSPL_Param):
@@ -2239,6 +2428,7 @@ class PSPL_GP_PhotAstromParam4(PSPL_PhotAstromParam4):
 #
 # --------------------------------------------------
 class PSPL(ABC):
+
     def animate(self, tE, time_steps, frame_time, name, size, zoom,
                 astrometry):
         """ Produces animation of microlensing event. 
@@ -2266,7 +2456,7 @@ class PSPL(ABC):
         tau = tE * times / (-times[0])
         t = self.t0 + (tau * self.tE)
 
-        A = self.get_amplification(t)
+        A = self.get_photometry(t)
         rA = self.get_resolved_amplification(t)
         aplus = rA[0]
         aminus = rA[1]
@@ -2383,12 +2573,12 @@ class PSPL(ABC):
             ax2.set_xlabel("time(tE)")
             ax2.set_ylabel("Magnification")
 
-            line = [line1, line2, line3, line4, line5]
+            line = [s_line1, l_line1, p_line1, m_line1, line5]
 
             def update(i, source, lens, plus, minus, tau, magnification, line):
                 print(i)
-                line[0].set_data(rs[i][0], rs[i][1])
-                line[1].set_data(l[i][0], l[i][1])
+                line[0].set_data(source[i][0], source[i][1])
+                line[1].set_data(lens[i][0], lens[i][1])
                 line[2].set_data(plus[i][0], plus[i][1])
                 line[3].set_data(minus[i][0], minus[i][1])
                 line[4].set_data(tau[:i], magnification[:i])
@@ -2408,6 +2598,7 @@ class PSPL(ABC):
     def get_photometry(self, t_obs, filt_idx=0, print_warning=True):
         mag_zp = 30.0  # arbitrary but allows for negative blend fractions.
         flux_zp = 1.0
+        print("in get_photometry")
 
         if hasattr(self, 'fdfdt'):
             flux_src = flux_zp * 10 ** (
@@ -2862,7 +3053,7 @@ class ParallaxClassABC(ABC):
 class PSPL_noParallax(ParallaxClassABC):
     parallaxFlag = False
 
-    def get_amplification(self, t):
+    def get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
         """noParallax: Get the photometric amplification term at a set of times, t.
 
         Parameters
@@ -2870,14 +3061,20 @@ class PSPL_noParallax(ParallaxClassABC):
         t: 
             Array of times in MJD.DDD
         """
-        tau = (t - self.t0) / self.tE
+        print("wwe still here - no parallax")
+        if t0 == None : t0 = self.t0
+        if tE == None : tE = self.tE
+        if len(u0) == 0 : u0 = self.u0
+        if len(thetaE_hat) == 0 : thetaE_hat = self.thetaE_hat
+
+        tau = (t - t0) / tE
 
         # Convert to matrices for more efficient operations.
         # Matrix shapes below are:
         #  u0, thetaE_hat: [1, 2]
         #  tau:      [N_times, 1]
-        u0 = self.u0.reshape(1, len(self.u0))
-        thetaE_hat = self.thetaE_hat.reshape(1, len(self.thetaE_hat))
+        u0 = u0.reshape(1, len(u0))
+        thetaE_hat = thetaE_hat.reshape(1, len(thetaE_hat))
         tau = tau.reshape(len(tau), 1)
 
         # Shape of u: [N_times, 2]
@@ -2891,7 +3088,7 @@ class PSPL_noParallax(ParallaxClassABC):
 
         return A
 
-    def get_lens_astrometry(self, t_obs):
+    def get_lens_astrometry(self, t_obs, t0=None, xL0=[], muL=[], piL=None, raL=None, decL=None):
         """Equation of motion for just the foreground lens.
 
         Parameters
@@ -2899,33 +3096,53 @@ class PSPL_noParallax(ParallaxClassABC):
         t_obs : array_like
             Time (in MJD).
         """
-        dt_in_years = (t_obs - self.t0) / days_per_year
-        xL = self.xL0 + np.outer(dt_in_years, self.muL) * 1e-3
+        if t0 == None : t0 = self.t0
+        if len(xL0) == 0 : xL0 = self.xL0
+        if len(muL) == 0: muL = self.muL
+
+        dt_in_years = (t_obs - t0) / days_per_year
+        xL = xL0 + np.outer(dt_in_years, muL) * 1e-3
 
         return xL
 
-    def get_astrometry(self, t_obs, ast_filt_idx=0):
+    def get_astrometry(self, t_obs, t0=None, tE=None, xS0=[], muS=[], thetaE_hat=[], thetaE_amp=None, u0=[], u0_amp=None, piS=None, thetaS0=[], muRel=None, piRel=None, raL=None, decL=None, ast_filt_idx=0):
         """noParallax: Position of the observed source position in arcsec."""
+        if t0 == None : t0 = self.t0
+        if tE == None : tE = self.tE
+        if len(xS0) == 0 : xS0 = self.xS0
+        if len(muS) == 0 : muS = self.muS
+        if len(thetaE_hat) == 0 : thetaE_hat = self.thetaE_hat
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+        if len(u0) == 0 : u0 = self.u0
+        if u0_amp == None : u0_amp = self.u0_amp
 
-        srce_pos_model = self.xS0 + np.outer((t_obs - self.t0) / days_per_year,
-                                             self.muS) * 1e-3
-        pos_model = srce_pos_model + (self.get_centroid_shift(t_obs) * 1e-3)
+        srce_pos_model = xS0 + np.outer((t_obs - t0) / days_per_year,
+                                             muS) * 1e-3
+        pos_model = srce_pos_model + (self.get_centroid_shift(t_obs, t0, tE, thetaE_hat, thetaE_amp, u0, u0_amp) * 1e-3)
         return pos_model
 
-    def get_centroid_shift(self, t):
+    def get_centroid_shift(self, t, t0=None, tE=None, thetaE_hat=[], thetaE_amp=None, u0=[], u0_amp=None):
         """noParallax: Get the centroid shift (in mas) for a list of
                 observation times (in MJD).
                 """
-        tau = (t - self.t0) / self.tE
+
+        if t0 == None : t0 = self.t0
+        if tE == None : tE = self.tE
+        if len(thetaE_hat) == 0 : thetaE_hat = self.thetaE_hat
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+        if len(u0) == 0 : u0 = self.u0
+        if u0_amp == None : u0_amp = self.u0_amp
+
+        tau = (t - t0) / tE
 
         # Lens-induced astrometric shift of the sum of all source images (in mas)
-        numer = (np.outer(tau, self.thetaE_hat) + self.u0) * self.thetaE_amp
-        denom = (tau ** 2.0 + self.u0_amp ** 2.0 + 2.0).reshape(numer.shape[0], 1)
+        numer = (np.outer(tau, thetaE_hat) + u0) * thetaE_amp
+        denom = (tau ** 2.0 + u0_amp ** 2.0 + 2.0).reshape(numer.shape[0], 1)
         shift = numer / denom
 
         return shift
 
-    def get_astrometry_unlensed(self, t_obs):
+    def get_astrometry_unlensed(self, t_obs, t0=None, xS0=[], muS=[], piS=None, raL=None, decL=None):
         """noParallax: Get the astrometry of the source if the lens didn't exist.
 
         Returns
@@ -2934,12 +3151,16 @@ class PSPL_noParallax(ParallaxClassABC):
             The unlensed positions of the source in arcseconds.
         """
         # Equation of motion for just the background source.
-        dt_in_years = (t_obs - self.t0) / days_per_year
-        xS_unlensed = self.xS0 + np.outer(dt_in_years, self.muS) * 1e-3
+        if t0 == None : t0 = self.t0
+        if len(xS0) == 0 : xS0 = self.xS0
+        if len(muS) == 0 : muS = self.muS
+        
+        dt_in_years = (t_obs - t0) / days_per_year
+        xS_unlensed = xS0 + np.outer(dt_in_years, muS) * 1e-3
 
         return xS_unlensed
 
-    def get_resolved_amplification(self, t):
+    def get_resolved_amplification(self, t, t0=None, thetaS0=[], muRel=[], thetaE_amp=None):
         """Get the photometric amplification term at a set of times, t for both the
         plus and minus images.
 
@@ -2948,10 +3169,16 @@ class PSPL_noParallax(ParallaxClassABC):
         t: 
             Array of times in MJD.DDD
         """
+        print("in get_resolved_amp")
+        if t0 == None : t0 = self.t0
+        if len(thetaS0) == 0 : thetaS0 = self.thetaS0
+        if len(muRel) == 0 : muRel = self.muRel
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+
         # Equation of relative motion (angular on sky) Eq. 16 from Hog+ 1995
-        dt_in_years = (t - self.t0) / days_per_year
-        thetaS = self.thetaS0 + np.outer(dt_in_years, self.muRel)  # mas
-        u = thetaS / self.thetaE_amp
+        dt_in_years = (t - t0) / days_per_year
+        thetaS = thetaS0 + np.outer(dt_in_years, muRel)  # mas
+        u = thetaS / thetaE_amp
         u_amp = np.linalg.norm(u, axis=1)
 
         A_plus = 0.5 * (
@@ -2961,7 +3188,7 @@ class PSPL_noParallax(ParallaxClassABC):
 
         return (A_plus, A_minus)
 
-    def get_resolved_astrometry(self, t_obs):
+    def get_resolved_astrometry(self, t_obs, t0=None, thetaS0=[], muRel=[], thetaE_amp=None, xL0=[], muL=[], piL=None, piRel=None, raL=None, decL=None):
         """Get the x, y astrometry for each of the two source images,
         which we label plus and minus.
 
@@ -2972,16 +3199,22 @@ class PSPL_noParallax(ParallaxClassABC):
             * xS_minus is the vector position of the plus image in arcsec
 
         """
+        if t0 == None : t0 = self.t0
+        if len(thetaS0) == 0 : thetaS0 = self.thetaS0
+        if len(muRel) == 0 :  muRel = self.muRel
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+        if len(xL0) == 0 : xL0 = self.xL0
+        if len(muL) == 0 : muL = self.muL
         # Things we will need.
         # dt_in_years = (t_obs - self.t0) / days_per_year
 
-        dt_in_years = (t_obs - self.t0) / days_per_year
+        dt_in_years = (t_obs - t0) / days_per_year
 
         # Equation of motion for the relative angular separation between the
         # background source and lens.
-        thetaS = self.thetaS0 + np.outer(dt_in_years, self.muRel)  # mas
+        thetaS = thetaS0 + np.outer(dt_in_years, muRel)  # mas
 
-        u_vec = thetaS / self.thetaE_amp
+        u_vec = thetaS / thetaE_amp
         u_amp = np.linalg.norm(u_vec, axis=1)
         u_hat = (u_vec.T / u_amp).T
 
@@ -2991,10 +3224,10 @@ class PSPL_noParallax(ParallaxClassABC):
         u_minus = u_minus.T
 
         # Lensed Source Images - Lens Image
-        xSL_plus = u_plus * self.thetaE_amp  # in mas
-        xSL_minus = u_minus * self.thetaE_amp  # in mas
+        xSL_plus = u_plus * thetaE_amp  # in mas
+        xSL_minus = u_minus * thetaE_amp  # in mas
 
-        xL = self.get_lens_astrometry(t_obs)
+        xL = self.get_lens_astrometry(t_obs, t0, xL0, muL)
 
         xS_plus = xL + (xSL_plus * 1e-3)  # arcsec
         xS_minus = xL + (xSL_minus * 1e-3)  # arcsec
@@ -3017,7 +3250,7 @@ class PSPL_Parallax(ParallaxClassABC):
                 "raL and decL must be provided when running parallax model.")
         # self.calc_piE_ecliptic()
 
-    def get_amplification(self, t):
+    def get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
         """Parallax: Get the photometric amplification term at a set of times, t.
 
         Parameters
@@ -3026,22 +3259,30 @@ class PSPL_Parallax(ParallaxClassABC):
             Array of times in MJD.DDD
         """
 
-        # Get the parallax vector for each date.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t)
+        if t0 == None : t0 = self.t0
+        if tE == None : tE = self.tE
+        if len(u0) == 0 : u0 = self.u0
+        if len(thetaE_hat) == 0 : thetaE_hat = self.thetaE_hat
+        if piE_amp == None : piE_amp = self.piE_amp
+        if raL == None : raL = self.raL
+        if decL == None : decL = self.decL
 
-        tau = (t - self.t0) / self.tE
+        # Get the parallax vector for each date.
+        parallax_vec = parallax_in_direction(raL, decL, t)
+
+        tau = (t - t0) / tE
 
         # Convert to matrices for more efficient operations.
         # Matrix shapes below are:
         #  u0, thetaE_hat: [1, 2]
         #  tau:      [N_times, 1]
-        u0 = self.u0.reshape(1, len(self.u0))
-        thetaE_hat = self.thetaE_hat.reshape(1, len(self.thetaE_hat))
+        u0 = u0.reshape(1, len(u0))
+        thetaE_hat = thetaE_hat.reshape(1, len(thetaE_hat))
         tau = tau.reshape(len(tau), 1)
 
         # Shape of u: [N_times, 2]
         u = u0 + tau * thetaE_hat
-        u -= self.piE_amp * parallax_vec
+        u -= piE_amp * parallax_vec
 
         # Shape of u_amp: [N_times]
         u_amp = np.linalg.norm(u, axis=1)
@@ -3050,37 +3291,55 @@ class PSPL_Parallax(ParallaxClassABC):
 
         return A
 
-    def get_lens_astrometry(self, t_obs):
+    def get_lens_astrometry(self, t_obs, t0=None, xL0=[], muL=[], piL=None, raL=None, decL=None):
         """Parallax: Get lens astrometry"""
+        if t0 == None : t0 = self.t0
+        if len(xL0) == 0 : xL0 = self.xL0
+        if len(muL) == 0 : muL = self.muL
+        if piL == None : piL = self.piL
+        if raL == None : raL= self.raL
+        if decL == None : decL = self.decL
+        
         # Get the parallax vector for each date.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t_obs)
+        parallax_vec = parallax_in_direction(raL, decL, t_obs)
 
         # Equation of motion for just the background source.
-        dt_in_years = (t_obs - self.t0) / days_per_year
-        xL = self.xL0 + np.outer(dt_in_years, self.muL) * 1e-3
-        xL += (self.piL * parallax_vec) * 1e-3  # arcsec
+        dt_in_years = (t_obs - t0) / days_per_year
+        xL = xL0 + np.outer(dt_in_years, muL) * 1e-3
+        xL += (piL * parallax_vec) * 1e-3  # arcsec
 
         return xL
 
-    def get_astrometry(self, t_obs, ast_filt_idx=0):
+    def get_astrometry(self, t_obs, t0=None, tE=None, xS0=[], muS=[], thetaE_hat=None, thetaE_amp=None, u0=None, u0_amp=None, piS=None, thetaS0=[], muRel=[], piRel=None, raL=None, decL=None, ast_filt_idx=0):
         """Parallax: Get astrometry"""
+        
+        if t0 == None : t0 = self.t0
+        if len(xS0) == 0 : xS0 = self.xS0
+        if len(muS) == 0 : muS = self.muS
+        if piS == None : piS = self.piS
+        if len(thetaS0) == 0 : thetaS0 = self.thetaS0
+        if len(muRel) == 0 : muRel = self.muRel
+        if piRel == None : piRel = self.piRel
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+        if raL == None : raL= self.raL
+        if decL == None : decL = self.decL
 
         # Things we will need.
-        dt_in_years = (t_obs - self.t0) / days_per_year
+        dt_in_years = (t_obs - t0) / days_per_year
 
         # Get the parallax vector for each date.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t_obs)
+        parallax_vec = parallax_in_direction(raL, decL, t_obs)
 
         # Equation of motion for just the background source.
-        xS_unlensed = self.xS0 + np.outer(dt_in_years, self.muS) * 1e-3
-        xS_unlensed += np.squeeze(self.piS * parallax_vec) * 1e-3  # arcsec
+        xS_unlensed = xS0 + np.outer(dt_in_years, muS) * 1e-3
+        xS_unlensed += np.squeeze(piS * parallax_vec) * 1e-3  # arcsec
 
         # Equation of motion for the relative angular separation between the background source and lens.
         # Note, we don't just call get_centroid_shift() because parallax_vec calculation is repeated.
         # and it is slow. 
-        thetaS = self.thetaS0 + np.outer(dt_in_years, self.muRel)  # mas
-        thetaS -= np.squeeze(self.piRel * parallax_vec)  # mas
-        u_vec = thetaS / self.thetaE_amp
+        thetaS = thetaS0 + np.outer(dt_in_years, muRel)  # mas
+        thetaS -= np.squeeze(piRel * parallax_vec)  # mas
+        u_vec = thetaS / thetaE_amp
         u_amp = np.linalg.norm(u_vec, axis=1)
 
         denom = u_amp ** 2 + 2.0
@@ -3112,7 +3371,7 @@ class PSPL_Parallax(ParallaxClassABC):
 
         return shift
 
-    def get_astrometry_unlensed(self, t_obs):
+    def get_astrometry_unlensed(self, t_obs, t0=None, xS0=[], muS=[], piS=None, raL=None, decL=None):
         """Get the astrometry of the source if the lens didn't exist.
 
         Returns
@@ -3120,17 +3379,23 @@ class PSPL_Parallax(ParallaxClassABC):
         xS_unlensed : numpy array, dtype=float, shape = len(t_obs) x 2
             The unlensed positions of the source in arcseconds.
         """
+        if t0 == None: t0 = self.t0
+        if len(xS0) == 0 : xS0 = self.xS0
+        if len(muS) == 0 : muS = self.muS
+        if piS == None: piS = self.piS
+        if raL == None: raL = self.raL
+        if decL == None: decL = self.decL
         # Get the parallax vector for each date.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t_obs)
+        parallax_vec = parallax_in_direction(raL, decL, t_obs)
 
         # Equation of motion for just the background source.
-        dt_in_years = (t_obs - self.t0) / days_per_year
-        xS_unlensed = self.xS0 + np.outer(dt_in_years, self.muS) * 1e-3
-        xS_unlensed += (self.piS * parallax_vec) * 1e-3  # arcsec
+        dt_in_years = (t_obs - t0) / days_per_year
+        xS_unlensed = xS0 + np.outer(dt_in_years, muS) * 1e-3
+        xS_unlensed += (piS * parallax_vec) * 1e-3  # arcsec
 
         return xS_unlensed
 
-    def get_resolved_amplification(self, t):
+    def get_resolved_amplification(self, t, t0=None, thetaS0=[], muRel=[], piRel=None, thetaE_amp=None, raL=None, decL=None):
         """Parallax: Get the photometric amplification term at a set of times, t for both the
         plus and minus images.
 
@@ -3139,14 +3404,22 @@ class PSPL_Parallax(ParallaxClassABC):
         t: 
             Array of times in MJD.DDD
         """
+        if t0 == None : t0 = self.t0
+        if len(thetaS0) == 0 : thetaS0 = self.thetaS0
+        if len(muRel) == 0 : muRel = self.muRel
+        if piRel == None : piRel = self.piRel
+        if thetaE_amp == None : thetaE_amp = self.thetaE_amp
+        if raL == None : raL= self.raL
+        if decL == None : decL = self.decL
+
         # Get the parallax vector for each date.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t)
+        parallax_vec = parallax_in_direction(raL, decL, t)
 
         # Equation of relative motion (angular on sky) Eq. 16 from Hog+ 1995
-        dt_in_years = (t - self.t0) / days_per_year
-        thetaS = self.thetaS0 + np.outer(dt_in_years, self.muRel) - (
-                self.piRel * parallax_vec)  # mas
-        u = thetaS / self.thetaE_amp
+        dt_in_years = (t - t0) / days_per_year
+        thetaS = thetaS0 + np.outer(dt_in_years, muRel) - (
+                piRel * parallax_vec)  # mas
+        u = thetaS / thetaE_amp
         u_amp = np.linalg.norm(u, axis=1)
 
         A_plus = 0.5 * (
@@ -3156,7 +3429,7 @@ class PSPL_Parallax(ParallaxClassABC):
 
         return (A_plus, A_minus)
 
-    def get_resolved_astrometry(self, t_obs):
+    def get_resolved_astrometry(self, t_obs, t0=None, thetaS0=[], muRel=[], thetaE_amp=None, xL0=[], muL=[], piL=None, piRel=None, raL=None, decL=None):
         """Parallax: Get the x, y astrometry for each of the two source images,
         which we label plus and minus.
 
@@ -3167,15 +3440,26 @@ class PSPL_Parallax(ParallaxClassABC):
             * xS_minus is the vector position of the plus image.
 
         """
-        dt_in_years = (t_obs - self.t0) / days_per_year
+        if t0 == None: t0 = self.t0
+        if len(thetaS0) == 0 : thetaS0 = self.thetaS0
+        if len(muRel) == 0 : muRel = self.muRel
+        if piRel == None: piRel = self.piRel
+        if thetaE_amp == None: thetaE_amp = self.thetaE_amp
+        if raL == None : raL= self.raL
+        if decL == None : decL = self.decL
+        if len(xL0) == 0 : xL0 = self.xL0
+        if len(muL) == 0 : muL = self.muL
+        if piL == None : piL = self.piL
+
+        dt_in_years = (t_obs - t0) / days_per_year
 
         # Equation of motion for the relative angular separation between the
         # background source and lens.
-        parallax_vec = parallax_in_direction(self.raL, self.decL, t_obs)
-        thetaS = self.thetaS0 + np.outer(dt_in_years, self.muRel)  # mas
-        thetaS -= (self.piRel * parallax_vec)  # mas
+        parallax_vec = parallax_in_direction(raL, decL, t_obs)
+        thetaS = thetaS0 + np.outer(dt_in_years, muRel)  # mas
+        thetaS -= (piRel * parallax_vec)  # mas
 
-        u_vec = thetaS / self.thetaE_amp
+        u_vec = thetaS / thetaE_amp
         u_amp = np.linalg.norm(u_vec, axis=1)
         u_hat = (u_vec.T / u_amp).T
 
@@ -3185,11 +3469,11 @@ class PSPL_Parallax(ParallaxClassABC):
         u_minus = u_minus.T
 
         # Lensed Source Images - Lens Image
-        xSL_plus = u_plus * self.thetaE_amp  # in mas
-        xSL_minus = u_minus * self.thetaE_amp  # in mas
+        xSL_plus = u_plus * thetaE_amp  # in mas
+        xSL_minus = u_minus * thetaE_amp  # in mas
 
-        xL = self.get_lens_astrometry(t_obs)
-
+        xL = self.get_lens_astrometry(t_obs, t0, xL0, muL, piL, raL, decL)
+        
         xS_plus = xL + (xSL_plus * 1e-3)  # arcsec
         xS_minus = xL + (xSL_minus * 1e-3)  # arcsec
 
@@ -8373,7 +8657,7 @@ class FSPL_PhotAstrom(FSPL, PSPL_PhotAstrom):
     def animate(self, crossings, time_steps, frame_time, name, size, zoom,
                 astrometry):
         # creates the animation html, given an instance of the Uniformly_bright class and a list of times
-
+        print("in here !! 2")
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = crossings * times / (-times[0])
         t = (tau * self.tE) + self.t0
@@ -8417,7 +8701,7 @@ class FSPL_PhotAstrom(FSPL, PSPL_PhotAstrom):
         line6, = ax2.plot(tau, A)
         ax1.legend()
         ax2.set_xlabel("Time(tE)")
-        ax2.set_ylabel("Magnification")
+        ax2.set_ylabel("Magnification in here 2")
 
         line = [line1, line2, line3, line4, line5, line6]
 
@@ -8852,7 +9136,7 @@ class FSPL_Limb(FSPL):
 
     def animate(self, crossings, time_steps, frame_time, name, size, zoom):
         # creates the animation html, given an instance of the Uniformly_bright class and a list of times
-
+        print("in here 3")
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = crossings * times / (-times[0])
         t = tau * self.tE
@@ -8894,7 +9178,7 @@ class FSPL_Limb(FSPL):
         line6, = ax2.plot(t, A)
         ax1.legend(fontsize=25, markerscale=3)
         ax2.set_xlabel("Time (days)", fontsize=40)
-        ax2.set_ylabel("Magnification", fontsize=40)
+        ax2.set_ylabel("Magnification in here 3", fontsize=40)
 
         line = [line1, line2, line3, line4, line5, line6]
 
