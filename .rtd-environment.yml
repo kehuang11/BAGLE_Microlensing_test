@@ -23,6 +23,7 @@ dependencies:
     - dynesty
     - pytest
     - mpi4py
+    - jupyter_contrib_nbextensions
     - pip:
         - sphinxcontrib-video
 

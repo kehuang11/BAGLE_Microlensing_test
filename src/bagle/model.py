@@ -351,7 +351,7 @@ solar_system_ephemeris.set('jpl')
 cache_dir = os.path.dirname(__file__) + '/parallax_cache/'
 cache_memory = Memory(cache_dir, verbose=0)
 
-
+plt.ion()
 ######################################################
 ### POINT SOURCE POINT LENS (PSPL) CLASSES ###
 ######################################################
