@@ -3061,7 +3061,6 @@ class PSPL_noParallax(ParallaxClassABC):
         t: 
             Array of times in MJD.DDD
         """
-        print("wwe still here - no parallax")
         if t0 == None : t0 = self.t0
         if tE == None : tE = self.tE
         if len(u0) == 0 : u0 = self.u0

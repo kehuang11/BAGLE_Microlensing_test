@@ -12,4 +12,3 @@ jplephem
 voila
 ipympl
 ipywidgets==7.7.2
-jupyter_contrib_nbextensions
