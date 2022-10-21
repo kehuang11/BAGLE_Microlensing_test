@@ -1337,6 +1337,7 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             title_fmt += r'$\theta_E$={3:.1f} mas, t$_E$={4:.0f} days'
             ax1.set_title(title_fmt.format(mL, dL, dS,
                                     thetaE_amp, tE), fontsize=12)
+            fig.canvas.draw()
 
         if range_dict == None:
             range_dict=dict()
