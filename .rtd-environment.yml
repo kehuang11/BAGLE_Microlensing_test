@@ -6,6 +6,7 @@ channels:
     - defaults
 
 dependencies:
+    - ipympl
     - ipywidgets
     - viola
     - python

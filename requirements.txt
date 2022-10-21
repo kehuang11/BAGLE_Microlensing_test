@@ -10,4 +10,5 @@ dynesty
 joblib
 jplephem
 voila
+ipympl
 ipywidgets
