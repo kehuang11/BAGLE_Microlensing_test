@@ -1360,7 +1360,9 @@ class PSPL_PhotAstromParam1(PSPL_Param):
 
         out = widgets.interactive_output(update, sliders_list)
         
-        display(ui_row_1, out)
+        #display(ui_row_1, out)
+
+        return ui_row_1, out
 
 
 class PSPL_PhotAstromParam2(PSPL_Param):
