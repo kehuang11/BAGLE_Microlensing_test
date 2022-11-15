@@ -3146,7 +3146,7 @@ class PSPL(ABC):
         
         sliders_ui = widgets.HBox(ui_list)
         out = widgets.interactive_output(update, sliders_list)    
-        display(widgets.HBox(ui_list), out)
+        #display(widgets.HBox(ui_list), out)
 
         return sliders_ui, out
 
