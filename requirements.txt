@@ -11,4 +11,4 @@ joblib
 jplephem
 voila
 ipympl
-ipywidgets==7.7.1
+ipywidgets==7.6.5
