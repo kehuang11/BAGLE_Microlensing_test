@@ -3144,10 +3144,11 @@ class PSPL(ABC):
         if len(col_sliders_list) > 0:
             ui_list.append(widgets.VBox(col_sliders_list))
         
+        sliders_ui = widgets.HBox(ui_list)
         out = widgets.interactive_output(update, sliders_list)    
         #display(widgets.HBox(ui_list), out)
-    
-        return widgets.HBox(ui_list), out
+
+        return sliders_ui, out
 
     def animate(self, tE, time_steps, frame_time, name, size, zoom,
                 astrometry):
