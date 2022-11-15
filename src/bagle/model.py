@@ -3169,6 +3169,7 @@ class PSPL_noParallax(ParallaxClassABC):
             Array of times in MJD.DDD
         """
         print("in get_resolved_amp")
+        print(widgets.__version__)
         if t0 == None : t0 = self.t0
         if len(thetaS0) == 0 : thetaS0 = self.thetaS0
         if len(muRel) == 0 : muRel = self.muRel
