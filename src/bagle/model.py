@@ -342,7 +342,6 @@ from functools import lru_cache, wraps
 import copy
 from bagle import frame_convert as fc
 from abc import ABC
-from bagle import model_fitter
 
 au_day_to_km_s = 1731.45683
 
@@ -398,6 +397,51 @@ class PSPL_Param(ABC):
     # need to set this.
     paramAstromFlag = False
     paramPhotFlag = False
+
+    default_priors = {
+        'mL': ('make_gen', 0, 100),
+        't0': ('make_t0_gen', None, None),
+        't0_prim': ('make_t0_gen', None, None),
+        'xS0_E': ('make_xS0_gen', None, None),
+        'xS0_N': ('make_xS0_gen', None, None),
+        'u0_amp': ('make_gen', -1, 1),
+        'u0_amp_prim': ('make_gen', -1, 1),
+        'beta': ('make_gen', -2, 2),
+        'muL_E': ('make_gen', -20, 20),
+        'muL_N': ('make_gen', -20, 20),
+        'muS_E': ('make_muS_EN_gen', None, None),
+        'muS_N': ('make_muS_EN_gen', None, None),
+        'dL': ('make_gen', 1000, 8000),
+        'dS': ('make_gen', 100, 10000),
+        'dL_dS': ('make_gen', 0.01, 0.99),
+        'b_sff': ('make_gen', 0.0, 1.5),
+        'mag_src': ('make_mag_src_gen', None, None),
+        'mag_src_pri': ('make_mag_src_gen', None, None),
+        'mag_src_sec': ('make_mag_src_gen', None, None),
+        'mag_base': ('make_mag_base_gen', None, None),
+        'tE': ('make_gen', 1, 400),
+        'piE_E': ('make_gen', -1, 1),
+        'piE_N': ('make_gen', -1, 1),
+        'piEN_piEE' : ('make_gen', -10, 10),
+        'thetaE': ('make_lognorm_gen', 0, 1),
+        'log10_thetaE': ('make_truncnorm_gen', -0.2, 0.3, -4, 4),
+        'q': ('make_gen', 0.001, 1),
+        'alpha': ('make_gen', 0, 360),
+        'phi': ('make_gen', 0, 360),
+        'sep': ('make_gen', 1e-4, 2e-2),
+        'piS': ('make_piS', None, None),
+        'add_err': ('make_gen', 0, 0.3),
+        'mult_err': ('make_gen', 1.0, 3.0),
+        'radius': ('make_gen', 1E-4, 1E-2),
+        'fratio_bin': ('make_gen', 0, 1),
+        # We really need to make some normal distributions. All these are junk right now.
+        'gp_log_rho': ('make_norm_gen', 0, 5),
+        'gp_log_S0': ('make_norm_gen', 0, 5),
+        'gp_log_sigma': ('make_norm_gen', 0, 5), 
+        'gp_rho':('make_invgamma_gen', None, None),
+        'gp_log_omega04_S0':('make_norm_gen', 0, 5), # FIX... get from data
+        'gp_log_omega0':('make_norm_gen', 0, 5)
+    }
 
     def __init__(self, *args, **kwargs):
         # Check that required phot_params are proper arrays.
@@ -488,7 +532,7 @@ class PSPL_Param(ABC):
          'mag_src': ('mag_src', 0), 'mag_base': ('mag_base', 0)}
 
         # Figure out the default range of sliders
-        default_prios = model_fitter.PSPL_Solver.default_priors
+        default_prios = self.default_priors
         default_ranges = {}
         for param in params: # For each parameter
             if param in default_prios.keys(): # Check if it has a default range
