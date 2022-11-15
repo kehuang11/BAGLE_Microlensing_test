@@ -971,8 +971,9 @@ class PSPL_PhotParam1(PSPL_Param):
 
         default_ranges = self.get_default_ranges(params)
 
-        self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
+        return sliders_ui, out
 
 class PSPL_PhotParam2(PSPL_Param):
     """
@@ -1142,7 +1143,9 @@ class PSPL_PhotParam2(PSPL_Param):
 
         default_ranges = self.get_default_ranges(params)
         
-        self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+
+        return sliders_ui, out
 
 class PSPL_PhotParam1_geoproj(PSPL_PhotParam1):
     """PSPL model for photometry only.
@@ -1453,9 +1456,9 @@ class PSPL_PhotAstromParam1(PSPL_Param):
         
         default_ranges = self.get_default_ranges(params)
 
-        self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
-
+        return sliders_ui, out
 class PSPL_PhotAstromParam2(PSPL_Param):
     """PSPL model for photometry and astrometry -- photom-like parameterization
 
@@ -1724,8 +1727,9 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
         default_ranges = self.get_default_ranges(params)
 
-        self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
+        return sliders_ui, out
 
 class PSPL_PhotAstromParam3(PSPL_Param):
     """
@@ -2002,8 +2006,9 @@ class PSPL_PhotAstromParam3(PSPL_Param):
 
         default_ranges = self.get_default_ranges(params)
 
-        self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
+        return sliders_ui, out
 
 class PSPL_PhotAstromParam4(PSPL_Param):
     """
@@ -2277,9 +2282,9 @@ class PSPL_PhotAstromParam4(PSPL_Param):
 
         default_ranges = self.get_default_ranges(params)
 
-        self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
     
-
+        return sliders_ui, out
 
 class PSPL_PhotAstromParam4_geoproj(PSPL_PhotAstromParam4):
     def __init__(self, t0, u0_amp, tE, thetaE, piS,
@@ -2952,8 +2957,9 @@ class PSPL(ABC):
             ui_list.append(widgets.VBox(col_sliders_list))
         
         out = widgets.interactive_output(update, sliders_list)    
-        display(widgets.HBox(ui_list), out)
+        #display(widgets.HBox(ui_list), out)
         
+        return widgets.HBox(ui_list), out
 
     def interact_display_PhotAstrom(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
@@ -3068,6 +3074,8 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param])
 
+            #display(widgets.HBox(ui_list), out)
+
         if range_dict == None:
             range_dict=dict()
         
@@ -3093,7 +3101,9 @@ class PSPL(ABC):
             ui_list.append(widgets.VBox(col_sliders_list))
         
         out = widgets.interactive_output(update, sliders_list)    
-        display(widgets.HBox(ui_list), out)
+        #display(widgets.HBox(ui_list), out)
+    
+        return widgets.HBox(ui_list), out
 
     def animate(self, tE, time_steps, frame_time, name, size, zoom,
                 astrometry):
