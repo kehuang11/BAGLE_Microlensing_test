@@ -1362,8 +1362,6 @@ class PSPL_PhotAstromParam1(PSPL_Param):
         
         display(ui_row_1, out)
 
-        #return ui_row_1, out
-
 
 class PSPL_PhotAstromParam2(PSPL_Param):
     """PSPL model for photometry and astrometry -- photom-like parameterization
