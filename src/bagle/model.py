@@ -342,6 +342,7 @@ from functools import lru_cache, wraps
 import copy
 from bagle import frame_convert as fc
 from abc import ABC
+import datetime
 
 au_day_to_km_s = 1731.45683
 
@@ -399,41 +400,60 @@ class PSPL_Param(ABC):
     paramPhotFlag = False
 
     default_priors = {
-        'mL': ('make_gen', 0, 100),
-        't0': ('make_t0_gen', None, None),
-        't0_prim': ('make_t0_gen', None, None),
-        'xS0_E': ('make_xS0_gen', None, None),
-        'xS0_N': ('make_xS0_gen', None, None),
-        'u0_amp': ('make_gen', -1, 1),
-        'u0_amp_prim': ('make_gen', -1, 1),
-        'beta': ('make_gen', -2, 2),
-        'muL_E': ('make_gen', -20, 20),
-        'muL_N': ('make_gen', -20, 20),
-        'muS_E': ('make_muS_EN_gen', None, None),
-        'muS_N': ('make_muS_EN_gen', None, None),
-        'dL': ('make_gen', 1000, 8000),
-        'dS': ('make_gen', 100, 10000),
-        'dL_dS': ('make_gen', 0.01, 0.99),
-        'b_sff': ('make_gen', 0.0, 1.5),
-        'mag_src': ('make_mag_src_gen', None, None),
-        'mag_src_pri': ('make_mag_src_gen', None, None),
-        'mag_src_sec': ('make_mag_src_gen', None, None),
-        'mag_base': ('make_mag_base_gen', None, None),
-        'tE': ('make_gen', 1, 400),
-        'piE_E': ('make_gen', -1, 1),
-        'piE_N': ('make_gen', -1, 1),
-        'piEN_piEE' : ('make_gen', -10, 10),
-        'thetaE': ('make_lognorm_gen', 0, 1),
-        'log10_thetaE': ('make_truncnorm_gen', -0.2, 0.3, -4, 4),
-        'q': ('make_gen', 0.001, 1),
-        'alpha': ('make_gen', 0, 360),
-        'phi': ('make_gen', 0, 360),
-        'sep': ('make_gen', 1e-4, 2e-2),
-        'piS': ('make_piS', None, None),
-        'add_err': ('make_gen', 0, 0.3),
-        'mult_err': ('make_gen', 1.0, 3.0),
-        'radius': ('make_gen', 1E-4, 1E-2),
-        'fratio_bin': ('make_gen', 0, 1),
+        'mL': (10, 0, 100, 'Msun'),
+        't0': (None, None, None, None),
+        't0_prim': (None, None, None, None),
+        'xS0': (None, None, None,'src pos'),
+        'xS0_E': (0, 0-5, 0+5, 'src pos'),
+        'xS0_N': (0, 0-5, 0+5, 'src pos'),
+        'xL0': (None, None, None, 'lens pos'),
+        'u0': (None, None, None, 'Einstein units'),
+        'u0_amp': (0, -1, 1, 'Einstein units'),
+        'u0_hat': (None, None, None, ''),
+        'u0_amp_prim': (0, -1, 1, 'Einstein units'),
+        'thetaS0': (None, None, None, 'mas'),
+        'beta': (0, -2, 2, 'mas'),
+        'muL': (None, None, None,'mas/yr'),
+        'muL_E': (0, -20, 20, 'mas/yr'),
+        'muL_N': (0, -20, 20, 'mas/yr'),
+        'muS': (None, None, None,'mas/yr'),
+        'muS_E': (-3, -3-10, -3+10, 'mas/yr'),
+        'muS_N': (-3, -3-10, -3+10, 'mas/yr'),
+        'muRel': (None, None, None, 'mas/yr'),
+        'muRel_amp': (None, None, None,'mas)'),
+        'muRel_hat': (None, None, None,''),
+        'kappa': (None, None, None,'mas/Msun'),
+        'dL': (3500, 1000, 8000, 'pc'),
+        'dS': (5000, 100, 10000, 'pc'),
+        'dL_dS': (0.5, 0.01, 0.99, ''),
+        'b_sff': (0.75, 0.0, 1.5, ''),
+        'mag_src': (19, 19-5, 19+5, 'mag'),
+        'mag_src_pri': (19, 19-5, 19+5,'mag'),
+        'mag_src_sec': (19, 19-5, 19+5,'mag'),
+        'mag_base': (19, 19-5, 19+5,'mag'),
+        'tE': (200, 1, 400, 'days'),
+        'piE': (None, None, None, 'Einstein units'),
+        'piE_amp': (None, None, None, 'Einstein units'),
+        'piE_E': (0, -1, 1, 'Einstein units'),
+        'piE_N': (0, -1, 1, 'Einstein units'),
+        'piEN_piEE' : (0, -10, 10, ''),
+        'thetaE': (0.5, 0, 1, 'mas'),
+        'thetaE_amp': (None, None, None, 'mas'),
+        'thetaE_hat': (None, None, None, ''),
+        'log10_thetaE': (0, -0.2, 0.3, -4, 4),
+        'q': ('make_gen', 0.001, 1, ''),
+        'alpha': ('make_gen', 0, 360, ''),
+        'phi': ('make_gen', 0, 360, ''),
+        'sep': ('make_gen', 1e-4, 2e-2, ''),
+        'piRel': (None, None, None, 'mas'),
+        'piS': (0.12, 0.01, 1, 'mas'),
+        'piL': (0.12, 0.01, 1, 'mas'),
+        'add_err': ('make_gen', 0, 0.3, ''),
+        'mult_err': ('make_gen', 1.0, 3.0, ''),
+        'radius': ('make_gen', 1E-4, 1E-2, ''),
+        'fratio_bin': ('make_gen', 0, 1, ''),
+        'raL': (None, None, None,'deg'),
+        'decL': (None, None, None,'deg'),
         # We really need to make some normal distributions. All these are junk right now.
         'gp_log_rho': ('make_norm_gen', 0, 5),
         'gp_log_S0': ('make_norm_gen', 0, 5),
@@ -444,6 +464,12 @@ class PSPL_Param(ABC):
     }
 
     def __init__(self, *args, **kwargs):
+
+        # Setup default_priors
+        t = Time(datetime.datetime.now().isoformat(), format='isot').mjd
+        self.default_priors['t0'] = (t, t-1000, t+1000, 'MJD.DDD')
+        self.default_priors['t0_prim'] = (t, t-1000, t+1000, 'MJD.DDD')
+        
         # Check that required phot_params are proper arrays.
         # If not, then make them arrays of len(1).
         for param in self.phot_param_names:
@@ -536,7 +562,8 @@ class PSPL_Param(ABC):
         default_ranges = {}
         for param in params: # For each parameter
             if param in default_prios.keys(): # Check if it has a default range
-                default_min = default_prios[param][1]
+                default_start = default_prios[param][0] or 0
+                default_min = default_prios[param][1] or 0
 
                 if default_min == None: # check if the min is None, then we must look at passed in attr     
                     if param in array_map:  # If none, check if its parameter is an array
@@ -546,7 +573,7 @@ class PSPL_Param(ABC):
 
                     default_min = min(default_min, 0)
 
-                default_max = default_prios[param][2] 
+                default_max = default_prios[param][2] or 0
 
                 if default_max == None:        
                     if param in array_map:
@@ -556,10 +583,10 @@ class PSPL_Param(ABC):
 
                     default_max = max(default_max, 0)
 
-                default_ranges[param] = (default_min, default_max)
+                default_ranges[param] = (default_start, default_min, default_max)
                 
             else:
-                default_ranges[param] = (0,0)
+                default_ranges[param] = (0, 0, 0)
 
         return default_ranges
 
@@ -947,7 +974,7 @@ class PSPL_PhotParam1(PSPL_Param):
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         
-        print("PSPL_PhotParam1")
+        #print("PSPL_PhotParam1")
 
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -1119,7 +1146,7 @@ class PSPL_PhotParam2(PSPL_Param):
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         
-        print("PSPL_PhotParam2")
+        #print("PSPL_PhotParam2")
 
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -1409,7 +1436,7 @@ class PSPL_PhotAstromParam1(PSPL_Param):
     
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
-        print("PSPL_PhotAstromParam1")
+        #print("PSPL_PhotAstromParam1")
 
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -1654,7 +1681,7 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
          
-        print("PSPL_PhotAstromParam2")
+        #print("PSPL_PhotAstromParam2")
 
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -1748,7 +1775,7 @@ class PSPL_PhotAstromParam2(PSPL_Param):
             # Calculate the Einstein crossing time. (days)
             #self_tE = (thetaE_amp / muRel_amp) * days_per_year
 
-            derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, "kappa_tmp":kappa_tmp, 
+            derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, 
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
@@ -1936,7 +1963,7 @@ class PSPL_PhotAstromParam3(PSPL_Param):
     
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
-        print("PSPL_PhotAstromParam3")
+        #print("PSPL_PhotAstromParam3")
         
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -2024,7 +2051,7 @@ class PSPL_PhotAstromParam3(PSPL_Param):
             # Calculate the position of the lens on the sky at time, t0
             xL0 = xS0 - (thetaS0 * 1e-3)
 
-            derived_params = {"mag_src":mag_src, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, "kappa_tmp":kappa_tmp,
+            derived_params = {"mag_src":mag_src, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
@@ -2213,7 +2240,7 @@ class PSPL_PhotAstromParam4(PSPL_Param):
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
-        print("PSPL_PhotAstromParam4")
+        #print("PSPL_PhotAstromParam4")
         
         # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
@@ -2301,7 +2328,7 @@ class PSPL_PhotAstromParam4(PSPL_Param):
             xL0 = xS0 - (thetaS0 * 1e-3)
 
             derived_params = {"mag_src":mag_src, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
-            "kappa_tmp":kappa_tmp, "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
+            "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
             # Calculate the Einstein crossing time. (days)
@@ -2973,18 +3000,25 @@ class PSPL(ABC):
 
             #dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
 
+            # Derived parameters
+            print('\n')
             for param in derived_params.keys():
-                print(param,": ", derived_params[param])
+                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
         if range_dict == None:
             range_dict=dict()
         
         # Create the sliders based on params
         sliders_list = dict()
+        sliders_div_list = dict()
         for param in params:
-            range_dict.setdefault(param, (default_ranges[param][0], default_ranges[param][1])) #sets key to default if key not in range_dict
-            curr_slider = widgets.FloatSlider(description=param, value=range_dict[param][0]+0.1, min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
+            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
+            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
             sliders_list[param] = curr_slider
+            if param in self.default_priors:
+                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
+            else:
+                sliders_div_list[param] = widgets.HBox(curr_slider)
 
         # Configures the layout for sliders
         ui_list = []
@@ -3028,7 +3062,7 @@ class PSPL(ABC):
         fig = plt.figure(figsize=[size[0], size[1] + 0.5])
         ax1 = fig.add_subplot(2, 1, 1)
         ax2 = fig.add_subplot(2, 1, 2)
-        fig.subplots_adjust(hspace=.5)
+        fig.subplots_adjust(top=1, hspace = 0.25)
 
         s_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Source",
                             color='gold', linewidth=2)
@@ -3115,27 +3149,34 @@ class PSPL(ABC):
             dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
             ax1.set_ylim(-dec_lim, dec_lim)
 
-            for param in derived_params.keys():
-                print(param,": ", derived_params[param])
+            # Derived parameters 
+            print('\n')
 
-            #display(widgets.HBox(ui_list), out)
+            for param in derived_params.keys():
+                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
+
 
         if range_dict == None:
             range_dict=dict()
         
         # Create the sliders based on params
         sliders_list = dict()
+        sliders_div_list = dict()
         for param in params:
-            range_dict.setdefault(param, (default_ranges[param][0], default_ranges[param][1])) #sets key to default if key not in range_dict
-            curr_slider = widgets.FloatSlider(description=param, value=range_dict[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
+            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
+            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
             sliders_list[param] = curr_slider
-
+            if param in self.default_priors:
+                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
+            else:
+                sliders_div_list[param] = widgets.HBox(curr_slider)
+            
         # Configures the layout for sliders
         ui_list = []
         col_sliders_list = []
         for i in range(len(params)):
             param = params[i]
-            col_sliders_list.append(sliders_list[param])
+            col_sliders_list.append(sliders_div_list[param])
             if i % 6 == 0 : #6 sliders in a column
                 if i != 0:
                     ui_list.append(widgets.VBox(col_sliders_list))
