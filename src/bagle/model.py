@@ -440,7 +440,7 @@ class PSPL_Param(ABC):
         'thetaE': (0.5, 0, 1, 'mas'),
         'thetaE_amp': (None, None, None, 'mas'),
         'thetaE_hat': (None, None, None, ''),
-        'log10_thetaE': (0, -0.2, 0.3, -4, 4),
+        'log10_thetaE': (-0.2, 0, 0.3, 'mas'),
         'q': ('make_gen', 0.001, 1, ''),
         'alpha': ('make_gen', 0, 360, ''),
         'phi': ('make_gen', 0, 360, ''),
