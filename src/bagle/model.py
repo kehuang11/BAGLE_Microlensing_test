@@ -878,6 +878,121 @@ class PSPL_AstromParam3(PSPL_Param):
 
         return
 
+    def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+
+        print("PSPL_PhotAstromParam3")
+        
+        # Reculates all the parameters. This function is passed into interact_display
+        def updateHelper(**kwargs):
+
+            t0 = kwargs.get('t0')
+            u0_amp = kwargs.get('u0_amp')
+            self_tE = kwargs.get('tE')
+            piE_E = kwargs.get('piE_E')
+            piE_N = kwargs.get('piE_N')
+            log10_thetaE = kwargs.get('log10_thetaE')
+            xS0_E = kwargs.get('xS0_E')
+            xS0_N = kwargs.get('xS0_N')
+            muS_E = kwargs.get('muS_E')
+            muS_N = kwargs.get('muS_N')
+            piS = kwargs.get('piS')
+            raL = kwargs.get('raL')
+            decL = kwargs.get('decL')
+
+            piE = np.array([piE_E, piE_N])
+            #thetaE = 10 ** log10_thetaE
+            thetaE_amp = 10 ** log10_thetaE
+            xS0 = np.array([xS0_E, xS0_N])
+            muS = np.array([muS_E, muS_N])
+
+            # Derived quantities
+            beta = u0_amp * thetaE_amp
+            piE_amp = np.linalg.norm(piE)
+            piRel = piE_amp * thetaE_amp
+            muRel_amp = thetaE_amp / (tE / days_per_year)
+
+            kappa_tmp = 4.0 * const.G / (const.c ** 2 * units.AU)
+            kappa = kappa_tmp.to(units.mas / units.Msun,
+                                equivalencies=units.dimensionless_angles()).value
+            mL = thetaE_amp ** 2 / (piRel * kappa)
+
+            piL = piRel + piS
+
+            # Calculate the distance to source and lens.
+            dL = (piL * units.mas).to(units.parsec,
+                                        equivalencies=units.parallax())
+            dS = (piS * units.mas).to(units.parsec,
+                                        equivalencies=units.parallax())
+            dL = dL.to('pc').value
+            dS = dS.to('pc').value
+
+            # Get the directional vectors.
+            thetaE_hat = piE / piE_amp
+            muRel = muRel_amp * thetaE_hat
+            muRel_hat = muRel / muRel_amp
+            thetaE = thetaE_amp * thetaE_hat
+
+            # Calculate the relative velocity vector. Note that this will be in the
+            # direction of theta_hat
+            muRel_E, muRel_N = muRel
+            muL = muS - muRel
+            muL_E, muL_N = muL
+
+            # Comment on sign conventions:
+            # thetaS0 = xS0 - xL0
+            # (difference in positions on sky, heliocentric, at t0)
+            # u0 = thetaS0 / thetaE -- so u0 is source - lens position vector
+            # if u0_E > 0 then the Source is to the East of the lens
+            # if u0_E < 0 then the source is to the West of the lens
+            # We adopt the following sign convention (same as Gould:2004):
+            #    u0_amp > 0 means u0_E > 0
+            #    u0_amp < 0 means u0_E < 0
+            # Note that we assume beta = u0_amp (with same signs).
+
+            # Calculate the closest approach vector. Define beta sign convention
+            # same as of Andy Gould does with beta > 0 means u0_E > 0
+            # (lens passes to the right of the source as seen from Earth or Sun).
+            # The function u0_hat_from_thetaE_hat is programmed to use thetaE_hat and beta, but
+            # the sign of beta is always the same as the sign of u0_amp. Therefore this
+            # usage of the function with u0_amp works exactly the same.
+            u0_hat = u0_hat_from_thetaE_hat(thetaE_hat, u0_amp)
+            u0 = np.abs(u0_amp) * u0_hat
+
+            # Angular separation vector between source and lens (vector from lens to source)
+            thetaS0 = u0 * thetaE_amp  # mas
+
+            # Calculate the position of the lens on the sky at time, t0
+            xL0 = xS0 - (thetaS0 * 1e-3)
+
+            derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
+            "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "thetaE":thetaE, 
+            "muRel_hat":muRel_hat, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
+
+            # Calculate the Einstein crossing time. (days)
+            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
+
+            ## replotting the graph.. based on updated values..
+            times = np.array(range(-time_steps, time_steps + 1, 1))
+            tau = tE * times / (-times[0])
+            t = t0 + (tau * self_tE)
+            
+            #magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
+            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
+
+            source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
+            ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
+            lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
+            astrometry = self.get_astrometry(t, t0, self_tE, xS0, muS, thetaE_hat, thetaE_amp, u0, u0_amp, piS, thetaS0, muRel, piRel, raL, decL)
+
+            return [dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, derived_params]
+
+        params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
+
+        default_ranges = self.get_default_ranges(params)
+
+        sliders_ui, out = self.interact_display_Astrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+
+        return sliders_ui, out
 
 class PSPL_PhotParam1(PSPL_Param):
     """PSPL model for photometry only.
@@ -2959,6 +3074,154 @@ class PSPL_GP_PhotAstromParam4(PSPL_PhotAstromParam4):
 #
 # --------------------------------------------------
 class PSPL(ABC):
+
+    def interact_display_Astrom(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+
+        # times = np.array(range(-time_steps, time_steps + 1, 1))
+        # tau = tE * times / (-times[0])
+        # t = self.t0 + (tau * self.tE)
+        # A = self.get_photometry(t)
+        # rA = self.get_resolved_amplification(t)
+        # aplus = rA[0]
+        # aminus = rA[1]
+        # rs = self.get_astrometry_unlensed(t)
+        # ri = self.get_resolved_astrometry(t)
+        # plus = ri[0]
+        # minus = ri[1]
+        # l = self.get_lens_astrometry(t)
+
+        # Setup the alpha for the lensed source images.
+        # aplus_alpha = (0.5 * (aplus - 1) / (aplus.max() - 1)) + 0.5
+        # aminus_alpha = (0.5 * (aminus - 1) / (aplus.max() - 1)) + 0.5
+
+        # sets up the figure
+        fig = plt.figure(figsize=[size[0], size[1] + 0.5])
+        ax1 = fig.add_subplot(2, 1, 1)
+        fig.subplots_adjust(top=1, hspace = 0.25)
+
+        s_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Source",
+                            color='gold', linewidth=2)
+        s_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='gold', linewidth=2)
+        l_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Lens",
+                            color='black', linewidth=2)
+        l_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='black', linewidth=2)
+        p_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Lensed Source Images",
+                            color='coral', linewidth=2)
+        p_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='coral', linewidth=2)
+        m_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
+                            color='coral', linewidth=2)
+        m_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='coral', linewidth=2)
+
+
+        # dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
+        ax1.set_xlabel('RA (")')
+        ax1.set_ylabel('Dec (")')
+        # ax1.set_xlim(
+        #     (l[0][0] + l[-1][0]) / 2 - 2 * (size[0]) / (2 * size[1]) * (
+        #             l[-1][1] - l[0][
+        #         1] + 2 * zoom * self.thetaE_amp * 1e-3),
+        #     (l[0][0] + l[-1][0]) / 2 + 2 * (size[0]) / (2 * size[1]) * (
+        #             l[-1][1] - l[0][
+        #         1] + 2 * zoom * self.thetaE_amp * 1e-3))
+        
+        # ax1.set_ylim(-dec_lim, dec_lim)
+            
+        # a = self.get_astrometry(t)
+        u_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
+                            color='red', linewidth=2,
+                            label="Unresolved Astrometry")
+        u_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
+                            color='red', linewidth=2)
+        ax1.legend(fontsize=12, loc='upper right')
+
+        line = [s_line1, s_line2, l_line1, l_line2,
+                p_line1, p_line2, m_line1, m_line2,
+                u_line1, u_line2] 
+
+        def update(**kwargs):
+            
+            dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, derived_params = updateHelper(**kwargs)
+            i = len(tau)-1
+            plus = ri[0]
+            minus = ri[1]
+            l = lens
+            #dS = dL / dL_dS
+            #inv_dist_diff = (1.0 / (dL * units.pc)) - (1.0 / (dS * units.pc))
+            #thetaE = units.rad * np.sqrt((4.0 * const.G * mL * units.M_sun / const.c ** 2) * inv_dist_diff)
+            #thetaE_amp = thetaE.to('mas').value  # mas
+
+            line[0].set_data(source[i, 0], source[i, 1])
+            line[1].set_data(source[:i + 1, 0], source[:i + 1, 1])
+            line[2].set_data(lens[i, 0], lens[i, 1])
+            line[3].set_data(lens[:i + 1, 0], lens[:i + 1, 1])
+            line[4].set_data(plus[i, 0], plus[i, 1])
+            line[5].set_data(plus[:i + 1, 0], plus[:i + 1, 1]) #unresolved astronometry
+            line[6].set_data(minus[i, 0], minus[i, 1]) #dot
+            line[7].set_data(minus[:i + 1, 0], minus[:i + 1, 1]) #lens sourced image (resolved astrometry)
+            line[8].set_data(astrometry[i, 0], astrometry[i, 1]) # unresolved astronometry
+            line[9].set_data(astrometry[:i + 1, 0], astrometry[:i + 1, 1])
+
+            title_fmt = r'm$_L$={0:.1f} M$_\odot$, d$_L$={1:.0f} pc, d$_S$={2:.0f} pc '
+            title_fmt += r'$\theta_E$={3:.1f} mas, t$_E$={4:.0f} days'
+            ax1.set_title(title_fmt.format(mL, dL, dS,
+                                    thetaE_amp, tE), fontsize=12)
+
+            ax1.set_xlim(
+            (l[0][0] + l[-1][0]) / 2 - 2 * (size[0]) / (2 * size[1]) * (
+                    l[-1][1] - l[0][
+                1] + 2 * zoom * thetaE_amp * 1e-3),
+            (l[0][0] + l[-1][0]) / 2 + 2 * (size[0]) / (2 * size[1]) * (
+                    l[-1][1] - l[0][
+                1] + 2 * zoom * thetaE_amp * 1e-3))
+
+            dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
+            ax1.set_ylim(-dec_lim, dec_lim)
+
+            # Derived parameters 
+            print('\n')
+
+            for param in derived_params.keys():
+                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
+
+
+        if range_dict == None:
+            range_dict=dict()
+        
+        # Create the sliders based on params
+        sliders_list = dict()
+        sliders_div_list = dict()
+        for param in params:
+            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
+            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
+            sliders_list[param] = curr_slider
+            if param in self.default_priors:
+                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
+            else:
+                sliders_div_list[param] = widgets.HBox(curr_slider)
+            
+        # Configures the layout for sliders
+        ui_list = []
+        col_sliders_list = []
+        for i in range(len(params)):
+            param = params[i]
+            col_sliders_list.append(sliders_div_list[param])
+            if i % 6 == 0 : #6 sliders in a column
+                if i != 0:
+                    ui_list.append(widgets.VBox(col_sliders_list))
+                    col_sliders_list = []
+
+        if len(col_sliders_list) > 0:
+            ui_list.append(widgets.VBox(col_sliders_list))
+        
+        sliders_ui = widgets.HBox(ui_list)
+        out = widgets.interactive_output(update, sliders_list)    
+        #display(widgets.HBox(ui_list), out)
+
+        return sliders_ui, out
 
     def interact_display_Phot(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         times = np.array(range(-time_steps, time_steps + 1, 1))
