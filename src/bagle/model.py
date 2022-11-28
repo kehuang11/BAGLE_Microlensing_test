@@ -734,6 +734,120 @@ class PSPL_AstromParam4(PSPL_Param):
 
         return
 
+    def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+         
+        print("PSPL_AstromParam4")
+
+        # Reculates all the parameters. This function is passed into interact_display
+        def updateHelper(**kwargs):
+
+            t0 = kwargs.get('t0')
+            u0_amp = kwargs.get('u0_amp')
+            self_tE = kwargs.get('tE')
+            thetaE = kwargs.get('thetaE')
+            piS = kwargs.get('piS')
+            piE_E = kwargs.get('piE_E')
+            piE_N = kwargs.get('piE_N')
+            xS0_E = kwargs.get('xS0_E')
+            xS0_N = kwargs.get('xS0_N')
+            muS_E = kwargs.get('muS_E')
+            muS_N = kwargs.get('muS_N')
+            raL = kwargs.get('raL')
+            decL = kwargs.get('decL')
+
+            piE = np.array([piE_E, piE_N])
+            thetaE_amp = thetaE
+            xS0 = np.array([xS0_E, xS0_N])
+            muS = np.array([muS_E, muS_N])
+
+            # Derived quantities
+            beta = u0_amp * thetaE_amp
+            piE_amp = np.linalg.norm(piE)
+            piRel = piE_amp * thetaE_amp
+            muRel_amp = thetaE_amp / (tE / days_per_year)
+
+            kappa_tmp = 4.0 * const.G / (const.c ** 2 * units.AU)
+            kappa = kappa_tmp.to(units.mas / units.Msun,
+                                equivalencies=units.dimensionless_angles()).value
+            mL = thetaE_amp ** 2 / (piRel * kappa)
+
+            piL = piRel + piS
+
+            # Calculate the distance to source and lens.
+            dL = (piL * units.mas).to(units.parsec,
+                                        equivalencies=units.parallax())
+            dS = (piS * units.mas).to(units.parsec,
+                                        equivalencies=units.parallax())
+            dL = dL.to('pc').value
+            dS = dS.to('pc').value
+
+            # Get the directional vectors.
+            thetaE_hat = piE / piE_amp
+            thetaE = thetaE_amp * thetaE_hat
+
+            # Calculate the relative velocity vector. Note that this will be in the
+            # direction of theta_hat
+            muRel = muRel_amp * thetaE_hat
+            muRel_hat = muRel / muRel_amp
+            muRel_E, muRel_N = muRel
+            muL = muS - muRel
+            muL_E, muL_N = muL
+
+            # Comment on sign conventions:
+            # thetaS0 = xS0 - xL0
+            # (difference in positions on sky, heliocentric, at t0)
+            # u0 = thetaS0 / thetaE -- so u0 is source - lens position vector
+            # if u0_E > 0 then the Source is to the East of the lens
+            # if u0_E < 0 then the source is to the West of the lens
+            # We adopt the following sign convention (same as Gould:2004):
+            #    u0_amp > 0 means u0_E > 0
+            #    u0_amp < 0 means u0_E < 0
+            # Note that we assume beta = u0_amp (with same signs).
+
+            # Calculate the closest approach vector. Define beta sign convention
+            # same as of Andy Gould does with beta > 0 means u0_E > 0
+            # (lens passes to the right of the source as seen from Earth or Sun).
+            # The function u0_hat_from_thetaE_hat is programmed to use thetaE_hat and beta, but
+            # the sign of beta is always the same as the sign of u0_amp. Therefore this
+            # usage of the function with u0_amp works exactly the same.
+            u0_hat = u0_hat_from_thetaE_hat(thetaE_hat, u0_amp)
+            u0 = np.abs(u0_amp) * u0_hat
+
+            # Angular separation vector between source and lens (vector from lens to source)
+            thetaS0 = u0 * thetaE_amp  # mas
+
+            # Calculate the position of the lens on the sky at time, t0
+            xL0 = xS0 - (thetaS0 * 1e-3)
+            xL0_E, xL0_N = xL0
+
+            # Calculate the Einstein crossing time. (days)
+            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
+
+            derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, 
+            "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "thetaE":thetaE,
+            "muRel_hat":muRel_hat, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
+
+            ## replotting the graph.. based on updated values..
+            times = np.array(range(-time_steps, time_steps + 1, 1))
+            tau = tE * times / (-times[0])
+            t = t0 + (tau * self_tE)
+            
+            #magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
+            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
+
+            source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
+            ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
+            lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
+            astrometry = self.get_astrometry(t, t0, self_tE, xS0, muS, thetaE_hat, thetaE_amp, u0, u0_amp, piS, thetaS0, muRel, piRel, raL, decL)
+
+            return [dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, derived_params]
+
+        params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
+
+        sliders_ui, out = self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+
+        return sliders_ui, out
+
 
 class PSPL_AstromParam3(PSPL_Param):
     """
@@ -988,9 +1102,7 @@ class PSPL_AstromParam3(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        default_ranges = self.get_default_ranges(params)
-
-        sliders_ui, out = self.interact_display_Astrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 
@@ -1155,9 +1267,7 @@ class PSPL_PhotParam1(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        default_ranges = self.get_default_ranges(params)
-
-        sliders_ui, out = self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 
@@ -1326,10 +1436,8 @@ class PSPL_PhotParam2(PSPL_Param):
             return [tau, magnification, derived_params]
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
-
-        default_ranges = self.get_default_ranges(params)
         
-        sliders_ui, out = self.interact_display_Phot(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 
@@ -1639,10 +1747,8 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             return [dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, magnification, derived_params]
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
-        
-        default_ranges = self.get_default_ranges(params)
 
-        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 class PSPL_PhotAstromParam2(PSPL_Param):
@@ -1911,9 +2017,7 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        default_ranges = self.get_default_ranges(params)
-
-        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 
@@ -2190,9 +2294,7 @@ class PSPL_PhotAstromParam3(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        default_ranges = self.get_default_ranges(params)
-
-        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
         return sliders_ui, out
 
@@ -2466,9 +2568,7 @@ class PSPL_PhotAstromParam4(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        default_ranges = self.get_default_ranges(params)
-
-        sliders_ui, out = self.interact_display_PhotAstrom(params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
     
         return sliders_ui, out
 
@@ -3075,7 +3175,7 @@ class PSPL_GP_PhotAstromParam4(PSPL_PhotAstromParam4):
 # --------------------------------------------------
 class PSPL(ABC):
 
-    def interact_display_Astrom(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+    def interact_display_Astrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
         # times = np.array(range(-time_steps, time_steps + 1, 1))
         # tau = tE * times / (-times[0])
@@ -3187,6 +3287,7 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
+        default_ranges = self.get_default_ranges(params)
 
         if range_dict == None:
             range_dict=dict()
@@ -3223,7 +3324,7 @@ class PSPL(ABC):
 
         return sliders_ui, out
 
-    def interact_display_Phot(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+    def interact_display_Phot(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = tE * times / (-times[0])
         t = self.t0 + (tau * self.tE)
@@ -3268,6 +3369,8 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
+        default_ranges = self.get_default_ranges(params)
+
         if range_dict == None:
             range_dict=dict()
         
@@ -3302,7 +3405,7 @@ class PSPL(ABC):
         
         return widgets.HBox(ui_list), out
 
-    def interact_display_PhotAstrom(self, params, default_ranges, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+    def interact_display_PhotAstrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = tE * times / (-times[0])
@@ -3418,6 +3521,7 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
+        default_ranges = self.get_default_ranges(params)
 
         if range_dict == None:
             range_dict=dict()
