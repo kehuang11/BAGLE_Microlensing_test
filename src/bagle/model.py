@@ -590,6 +590,9 @@ class PSPL_Param(ABC):
 
         return default_ranges
 
+    def get_params(self):
+        return self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
+
 class PSPL_AstromParam4(PSPL_Param):
     """
     Point Source Point Lens model for microlensing. This model includes
@@ -844,9 +847,8 @@ class PSPL_AstromParam4(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        return self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
-        return sliders_ui, out
 
 
 class PSPL_AstromParam3(PSPL_Param):
@@ -1102,9 +1104,8 @@ class PSPL_AstromParam3(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        return self.interact_display_Astrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
-        return sliders_ui, out
 
 class PSPL_PhotParam1(PSPL_Param):
     """PSPL model for photometry only.
@@ -1267,9 +1268,7 @@ class PSPL_PhotParam1(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
-
-        return sliders_ui, out
+        return self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
 class PSPL_PhotParam2(PSPL_Param):
     """
@@ -1437,9 +1436,7 @@ class PSPL_PhotParam2(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
         
-        sliders_ui, out = self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
-
-        return sliders_ui, out
+        return self.interact_display_Phot(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
 class PSPL_PhotParam1_geoproj(PSPL_PhotParam1):
     """PSPL model for photometry only.
@@ -1748,9 +1745,8 @@ class PSPL_PhotAstromParam1(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        return self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
-        return sliders_ui, out
 class PSPL_PhotAstromParam2(PSPL_Param):
     """PSPL model for photometry and astrometry -- photom-like parameterization
 
@@ -2017,9 +2013,8 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
+        return self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
-        return sliders_ui, out
 
 class PSPL_PhotAstromParam3(PSPL_Param):
     """
@@ -2294,9 +2289,7 @@ class PSPL_PhotAstromParam3(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
-
-        return sliders_ui, out
+        return self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
 class PSPL_PhotAstromParam4(PSPL_Param):
     """
@@ -2568,9 +2561,7 @@ class PSPL_PhotAstromParam4(PSPL_Param):
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
 
-        sliders_ui, out = self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
-    
-        return sliders_ui, out
+        return self.interact_display_PhotAstrom(params, updateHelper, tE, time_steps, size, zoom, slider_step, range_dict)
 
 class PSPL_PhotAstromParam4_geoproj(PSPL_PhotAstromParam4):
     def __init__(self, t0, u0_amp, tE, thetaE, piS,
@@ -3175,6 +3166,44 @@ class PSPL_GP_PhotAstromParam4(PSPL_PhotAstromParam4):
 # --------------------------------------------------
 class PSPL(ABC):
 
+    def display_sliders(self, params, update_func, range_dict, slider_step, n):
+
+        default_ranges = self.get_default_ranges(params)
+
+        if range_dict == None:
+            range_dict=dict()
+        
+        # Create the sliders based on params
+        sliders_list = dict()
+        sliders_div_list = dict()
+        for param in params:
+            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
+            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
+            sliders_list[param] = curr_slider
+            if param in self.default_priors:
+                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
+            else:
+                sliders_div_list[param] = widgets.HBox(curr_slider)
+
+        # Configures the layout for sliders
+        ui_list = []
+        col_sliders_list = []
+        for i in range(len(params)):
+            param = params[i]
+            col_sliders_list.append(sliders_list[param])
+            if i % n == 0 : #6 sliders in a column
+                if i != 0:
+                    ui_list.append(widgets.VBox(col_sliders_list))
+                    col_sliders_list = []
+
+        if len(col_sliders_list) > 0:
+            ui_list.append(widgets.VBox(col_sliders_list))
+        
+        out = widgets.interactive_output(update_func, sliders_list)    
+        #display(widgets.HBox(ui_list), out)
+        
+        return widgets.HBox(ui_list), out, sliders_list
+
     def interact_display_Astrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
         # times = np.array(range(-time_steps, time_steps + 1, 1))
@@ -3287,42 +3316,7 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
-        default_ranges = self.get_default_ranges(params)
-
-        if range_dict == None:
-            range_dict=dict()
-        
-        # Create the sliders based on params
-        sliders_list = dict()
-        sliders_div_list = dict()
-        for param in params:
-            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
-            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
-            sliders_list[param] = curr_slider
-            if param in self.default_priors:
-                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
-            else:
-                sliders_div_list[param] = widgets.HBox(curr_slider)
-            
-        # Configures the layout for sliders
-        ui_list = []
-        col_sliders_list = []
-        for i in range(len(params)):
-            param = params[i]
-            col_sliders_list.append(sliders_div_list[param])
-            if i % 6 == 0 : #6 sliders in a column
-                if i != 0:
-                    ui_list.append(widgets.VBox(col_sliders_list))
-                    col_sliders_list = []
-
-        if len(col_sliders_list) > 0:
-            ui_list.append(widgets.VBox(col_sliders_list))
-        
-        sliders_ui = widgets.HBox(ui_list)
-        out = widgets.interactive_output(update, sliders_list)    
-        #display(widgets.HBox(ui_list), out)
-
-        return sliders_ui, out
+        return self.display_sliders(params, update, range_dict, slider_step, 4)
 
     def interact_display_Phot(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         times = np.array(range(-time_steps, time_steps + 1, 1))
@@ -3369,41 +3363,7 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
-        default_ranges = self.get_default_ranges(params)
-
-        if range_dict == None:
-            range_dict=dict()
-        
-        # Create the sliders based on params
-        sliders_list = dict()
-        sliders_div_list = dict()
-        for param in params:
-            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
-            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
-            sliders_list[param] = curr_slider
-            if param in self.default_priors:
-                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
-            else:
-                sliders_div_list[param] = widgets.HBox(curr_slider)
-
-        # Configures the layout for sliders
-        ui_list = []
-        col_sliders_list = []
-        for i in range(len(params)):
-            param = params[i]
-            col_sliders_list.append(sliders_list[param])
-            if i % 4 == 0 : #6 sliders in a column
-                if i != 0:
-                    ui_list.append(widgets.VBox(col_sliders_list))
-                    col_sliders_list = []
-
-        if len(col_sliders_list) > 0:
-            ui_list.append(widgets.VBox(col_sliders_list))
-        
-        out = widgets.interactive_output(update, sliders_list)    
-        #display(widgets.HBox(ui_list), out)
-        
-        return widgets.HBox(ui_list), out
+        return self.display_sliders(params, update, range_dict, slider_step, 4)
 
     def interact_display_PhotAstrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
 
@@ -3521,42 +3481,7 @@ class PSPL(ABC):
             for param in derived_params.keys():
                 print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
 
-        default_ranges = self.get_default_ranges(params)
-
-        if range_dict == None:
-            range_dict=dict()
-        
-        # Create the sliders based on params
-        sliders_list = dict()
-        sliders_div_list = dict()
-        for param in params:
-            range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
-            curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
-            sliders_list[param] = curr_slider
-            if param in self.default_priors:
-                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
-            else:
-                sliders_div_list[param] = widgets.HBox(curr_slider)
-            
-        # Configures the layout for sliders
-        ui_list = []
-        col_sliders_list = []
-        for i in range(len(params)):
-            param = params[i]
-            col_sliders_list.append(sliders_div_list[param])
-            if i % 6 == 0 : #6 sliders in a column
-                if i != 0:
-                    ui_list.append(widgets.VBox(col_sliders_list))
-                    col_sliders_list = []
-
-        if len(col_sliders_list) > 0:
-            ui_list.append(widgets.VBox(col_sliders_list))
-        
-        sliders_ui = widgets.HBox(ui_list)
-        out = widgets.interactive_output(update, sliders_list)    
-        #display(widgets.HBox(ui_list), out)
-
-        return sliders_ui, out
+        return self.display_sliders(params, update, range_dict, slider_step, 6)
 
     def animate(self, tE, time_steps, frame_time, name, size, zoom,
                 astrometry):
