@@ -3190,7 +3190,7 @@ class PSPL(ABC):
         col_sliders_list = []
         for i in range(len(params)):
             param = params[i]
-            col_sliders_list.append(sliders_list[param])
+            col_sliders_list.append(sliders_div_list[param])
             if i % n == 0 : #6 sliders in a column
                 if i != 0:
                     ui_list.append(widgets.VBox(col_sliders_list))
@@ -3225,7 +3225,7 @@ class PSPL(ABC):
 
         # sets up the figure
         fig = plt.figure(figsize=[size[0], size[1] + 0.5])
-        ax1 = fig.add_subplot(2, 1, 1)
+        ax1 = fig.add_subplot(1, 1, 1)
         fig.subplots_adjust(top=1, hspace = 0.25)
 
         s_line1, = ax1.plot([], '.', markersize=size[0] * 1.3, label="Source",
