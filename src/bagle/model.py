@@ -399,7 +399,8 @@ class PSPL_Param(ABC):
     paramAstromFlag = False
     paramPhotFlag = False
 
-    default_priors = {
+    # default ranges map for parameters
+    default_ranges = {
         'mL': (10, 0, 100, 'Msun'),
         't0': (None, None, None, None),
         't0_prim': (None, None, None, None),
@@ -420,7 +421,7 @@ class PSPL_Param(ABC):
         'muS_E': (-3, -3-10, -3+10, 'mas/yr'),
         'muS_N': (-3, -3-10, -3+10, 'mas/yr'),
         'muRel': (None, None, None, 'mas/yr'),
-        'muRel_amp': (None, None, None,'mas)'),
+        'muRel_amp': (None, None, None,'mas'),
         'muRel_hat': (None, None, None,''),
         'kappa': (None, None, None,'mas/Msun'),
         'dL': (3500, 1000, 8000, 'pc'),
@@ -465,10 +466,10 @@ class PSPL_Param(ABC):
 
     def __init__(self, *args, **kwargs):
 
-        # Setup default_priors
+        # Setup default_ranges
         t = Time(datetime.datetime.now().isoformat(), format='isot').mjd
-        self.default_priors['t0'] = (t, t-1000, t+1000, 'MJD.DDD')
-        self.default_priors['t0_prim'] = (t, t-1000, t+1000, 'MJD.DDD')
+        self.default_ranges['t0'] = (t, t-1000, t+1000, 'MJD.DDD')
+        self.default_ranges['t0_prim'] = (t, t-1000, t+1000, 'MJD.DDD')
         
         # Check that required phot_params are proper arrays.
         # If not, then make them arrays of len(1).
@@ -558,12 +559,12 @@ class PSPL_Param(ABC):
          'mag_src': ('mag_src', 0), 'mag_base': ('mag_base', 0)}
 
         # Figure out the default range of sliders
-        default_prios = self.default_priors
+        default_ranges = self.default_ranges
         default_ranges = {}
         for param in params: # For each parameter
-            if param in default_prios.keys(): # Check if it has a default range
-                default_start = default_prios[param][0] or 0
-                default_min = default_prios[param][1] or 0
+            if param in default_ranges.keys(): # Check if it has a default range
+                default_start = default_ranges[param][0] or 0
+                default_min = default_ranges[param][1] or 0
 
                 if default_min == None: # check if the min is None, then we must look at passed in attr     
                     if param in array_map:  # If none, check if its parameter is an array
@@ -573,7 +574,7 @@ class PSPL_Param(ABC):
 
                     default_min = min(default_min, 0)
 
-                default_max = default_prios[param][2] or 0
+                default_max = default_ranges[param][2] or 0
 
                 if default_max == None:        
                     if param in array_map:
@@ -738,12 +739,47 @@ class PSPL_AstromParam4(PSPL_Param):
         return
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
-         
-        print("PSPL_AstromParam4")
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        # Reculates all the parameters. This function is passed into interact_display
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
+
+        
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -762,6 +798,8 @@ class PSPL_AstromParam4(PSPL_Param):
             thetaE_amp = thetaE
             xS0 = np.array([xS0_E, xS0_N])
             muS = np.array([muS_E, muS_N])
+
+            #### START MODEL CALCULATIONS
 
             # Derived quantities
             beta = u0_amp * thetaE_amp
@@ -823,20 +861,17 @@ class PSPL_AstromParam4(PSPL_Param):
             xL0 = xS0 - (thetaS0 * 1e-3)
             xL0_E, xL0_N = xL0
 
-            # Calculate the Einstein crossing time. (days)
-            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
+            #### END MODEL CALCULATIONS
 
+            # Mapping the derived parameters
             derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, 
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "thetaE":thetaE,
             "muRel_hat":muRel_hat, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
-            
-            #magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
 
             source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
             ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
@@ -995,12 +1030,46 @@ class PSPL_AstromParam3(PSPL_Param):
         return
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        print("PSPL_PhotAstromParam3")
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
         
-        # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_Astrom
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -1020,6 +1089,8 @@ class PSPL_AstromParam3(PSPL_Param):
             thetaE_amp = 10 ** log10_thetaE
             xS0 = np.array([xS0_E, xS0_N])
             muS = np.array([muS_E, muS_N])
+
+            #### START MODEL CALCULATIONS
 
             # Derived quantities
             beta = u0_amp * thetaE_amp
@@ -1080,20 +1151,17 @@ class PSPL_AstromParam3(PSPL_Param):
             # Calculate the position of the lens on the sky at time, t0
             xL0 = xS0 - (thetaS0 * 1e-3)
 
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "thetaE":thetaE, 
             "muRel_hat":muRel_hat, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
-            # Calculate the Einstein crossing time. (days)
-            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
-
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
-            
-            #magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
 
             source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
             ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
@@ -1201,12 +1269,46 @@ class PSPL_PhotParam1(PSPL_Param):
         return
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
-        
-        #print("PSPL_PhotParam1")
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        # Reculates all the parameters. This function is passed into interact_display
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
+
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -1218,8 +1320,9 @@ class PSPL_PhotParam1(PSPL_Param):
             raL = kwargs.get('raL') 
             decL = kwargs.get('decL')
 
-
             mag_base = mag_src + 2.5 * np.log10(b_sff)
+            
+            #### START MODEL CALCULATIONS
 
             # Calculate the microlensing parallax amplitude
             piE_amp = np.linalg.norm(piE)
@@ -1248,22 +1351,19 @@ class PSPL_PhotParam1(PSPL_Param):
             u0_hat = u0_hat_from_thetaE_hat(thetaE_hat, u0_amp)
             u0 = np.abs(u0_amp) * u0_hat
 
-            # Derived parameters
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"mag_base":mag_base, "piE_amp":piE_amp, "thetaE_hat":thetaE_hat, "muRel_hat":muRel_hat,
             "u0_hat":u0_hat, "u0":u0 }
 
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
             
             magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
-
-            #source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
-            #ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
-            #lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
-            #astrometry = self.get_astrometry(t, t0, self_tE, xS0, muS, thetaE_hat, thetaE_amp, u0, u0_amp, piS, thetaS0, muRel, piRel, raL, decL)            
+        
             return [tau, magnification, derived_params]
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
@@ -1369,12 +1469,46 @@ class PSPL_PhotParam2(PSPL_Param):
         return
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
-        
-        #print("PSPL_PhotParam2")
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        # Reculates all the parameters. This function is passed into interact_display
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
+
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -1386,8 +1520,9 @@ class PSPL_PhotParam2(PSPL_Param):
             raL = kwargs.get('raL') 
             decL = kwargs.get('decL')
 
-
             mag_src = mag_base - 2.5 * np.log10(b_sff)
+
+            #### START MODEL CALCULATIONS
 
             # Calculate the microlensing parallax amplitude
             piE_amp = np.linalg.norm(piE)
@@ -1416,22 +1551,19 @@ class PSPL_PhotParam2(PSPL_Param):
             u0_hat = u0_hat_from_thetaE_hat(thetaE_hat, u0_amp)
             u0 = np.abs(u0_amp) * u0_hat
 
-            # Derived parameters
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"mag_src":mag_src, "piE_amp":piE_amp, "thetaE_hat":thetaE_hat, "muRel_hat":muRel_hat,
             "u0_hat":u0_hat, "u0":u0 }
 
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
             
             magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
-
-            #source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
-            #ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
-            #lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
-            #astrometry = self.get_astrometry(t, t0, self_tE, xS0, muS, thetaE_hat, thetaE_amp, u0, u0_amp, piS, thetaS0, muRel, piRel, raL, decL)            
+           
             return [tau, magnification, derived_params]
 
         params =  self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
@@ -1655,12 +1787,46 @@ class PSPL_PhotAstromParam1(PSPL_Param):
         return
     
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        #print("PSPL_PhotAstromParam1")
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
 
-        # Reculates all the parameters. This function is passed into interact_display
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
+
         def updateHelper(**kwargs):
-            
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
+
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs      
             mL = kwargs.get('mL')
             t0 = kwargs.get('t0')
             beta = kwargs.get('beta')
@@ -1677,15 +1843,14 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             raL = kwargs.get('raL') 
             decL = kwargs.get('decL')
 
-
             dS = dL / dL_dS
             xS0 = np.array([xS0_E, xS0_N])
             muL = np.array([muL_E, muL_N])
             muS = np.array([muS_E, muS_N])
-            #self.raL = raL
-            #self.decL = decL
-            #super().__init__()
             mag_base = mag_src + 2.5 * np.log10(b_sff)
+
+            #### START MODEL CALCULATIONS
+
             # Calculate the relative parallax
             inv_dist_diff = (1.0 / (dL * units.pc)) - (1.0 / (dS * units.pc))
             piRel = units.rad * units.au * inv_dist_diff
@@ -1700,8 +1865,6 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             muRel = muS - muL
             muRel_E, muRel_N = muRel
             muRel_amp = np.linalg.norm(muRel)  # mas/yr
-            #muS_E, muS_N = muS
-            #muL_E, muL_N = muL
             
             # Calculate the Einstein radius
             thetaE = units.rad * np.sqrt(
@@ -1720,7 +1883,9 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             piE = piE_amp * thetaE_hat
             piE_E, piE_N = piE
 
-            # Derived parameters
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"dS":dS, "mag_base":mag_base, "piRel":piRel, "piS":piS, "piL":piL, "muRel":muRel, "muRel_amp":muRel_amp,
                 "thetaE":thetaE, "thetaE_amp":thetaE_amp, "thetaE_hat": thetaE_hat, "u0_hat": u0_hat, "u0_amp": u0_amp, "u0":u0,
                 "thetaS0":thetaS0, "xL0":xL0, "piE":piE }
@@ -1728,13 +1893,12 @@ class PSPL_PhotAstromParam1(PSPL_Param):
             # Calculate the Einstein crossing time. (days)
             self_tE = (thetaE_amp / muRel_amp) * days_per_year
 
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
             
             magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
 
             source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
             ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
@@ -1897,12 +2061,46 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
-         
-        #print("PSPL_PhotAstromParam2")
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        # Reculates all the parameters. This function is passed into interact_display
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
+
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -1923,12 +2121,9 @@ class PSPL_PhotAstromParam2(PSPL_Param):
             thetaE_amp = thetaE
             xS0 = np.array([xS0_E, xS0_N])
             muS = np.array([muS_E, muS_N])
-
-            # Must call after setting parameters.
-            # This checks for proper parameter formatting.
-            # super().__init__()
-
             mag_base = mag_src + 2.5 * np.log10(b_sff)
+
+            #### START MODEL CALCULATIONS
 
             # Derived quantities
             beta = u0_amp * thetaE_amp
@@ -1988,21 +2183,20 @@ class PSPL_PhotAstromParam2(PSPL_Param):
 
             # Calculate the position of the lens on the sky at time, t0
             xL0 = xS0 - (thetaS0 * 1e-3)
+            
+            #### END MODEL CALCULATIONS
 
-            # Calculate the Einstein crossing time. (days)
-            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
-
-            derived_params = {"beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, 
+            # Map derived parameters.
+            derived_params = {"mag_base":mag_base, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp, 
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
             
             magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
 
             source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
             ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
@@ -2176,12 +2370,46 @@ class PSPL_PhotAstromParam3(PSPL_Param):
         return
     
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        #print("PSPL_PhotAstromParam3")
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
         
-        # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -2198,12 +2426,13 @@ class PSPL_PhotAstromParam3(PSPL_Param):
             raL = kwargs.get('raL')
             decL = kwargs.get('decL')
 
-
             piE = np.array([piE_E, piE_N])
             thetaE = 10 ** log10_thetaE
             thetaE_amp = 10 ** log10_thetaE
             xS0 = np.array([xS0_E, xS0_N])
             muS = np.array([muS_E, muS_N])
+
+            #### START MODEL CALCULATIONS
 
             # Derived quantities
             mag_src = mag_base - 2.5 * np.log10(b_sff)
@@ -2265,14 +2494,14 @@ class PSPL_PhotAstromParam3(PSPL_Param):
             # Calculate the position of the lens on the sky at time, t0
             xL0 = xS0 - (thetaS0 * 1e-3)
 
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"mag_src":mag_src, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
-            # Calculate the Einstein crossing time. (days)
-            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
-
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
@@ -2449,12 +2678,46 @@ class PSPL_PhotAstromParam4(PSPL_Param):
         return
 
     def interact(self, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Produces an interactive model of microlensing event. This function uses the calculations
+        that are produced in the model's __init__ function and displays the interative model by 
+        calling the interact_display_x.
 
-        #print("PSPL_PhotAstromParam4")
+        This function takes the PSPL and makes an interactive model, the input variables are as follows
+
+        Parameters
+        --------------
+
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        """
         
-        # Reculates all the parameters. This function is passed into interact_display
         def updateHelper(**kwargs):
+            """
+            This function is responsible for doing all of the calculations, as well as producing
+            the derived parameters for the model. The calculations are based off of the model's
+            __init__ function. This function is passed as an argument to interact_display_x
+            so that calculations can be made everytime the user interacts with a slider.
 
+            Parameters
+            --------------
+            kwargs:
+                keyworded, variable-length argument list
+            """
+
+            # Retrieve the necessary variables from kwargs
             t0 = kwargs.get('t0')
             u0_amp = kwargs.get('u0_amp')
             self_tE = kwargs.get('tE')
@@ -2471,11 +2734,12 @@ class PSPL_PhotAstromParam4(PSPL_Param):
             raL = kwargs.get('raL')
             decL = kwargs.get('decL')
 
-
             piE = np.array([piE_E, piE_N])
             thetaE_amp = thetaE
             xS0 = np.array([xS0_E, xS0_N])
             muS = np.array([muS_E, muS_N])
+
+            #### START MODEL CALCULATIONS
 
             # Derived quantities
             mag_src = mag_base - 2.5 * np.log10(b_sff)
@@ -2537,21 +2801,19 @@ class PSPL_PhotAstromParam4(PSPL_Param):
             # Calculate the position of the lens on the sky at time, t0
             xL0 = xS0 - (thetaS0 * 1e-3)
 
+            #### END MODEL CALCULATIONS
+
+            # Map derived parameters
             derived_params = {"mag_src":mag_src, "beta":beta, "piE_amp":piE_amp, "piRel":piRel, "muRel_amp":muRel_amp,
             "kappa":kappa, "mL":mL, "piL":piL, "dL":dL, "dS":dS,  "thetaE_hat": thetaE_hat, "muRel_hat":muRel_hat, 
             "thetaE":thetaE, "muRel":muRel, "muL":muL, "u0_hat":u0_hat, "u0":u0, "thetaS0":thetaS0, "xL0":xL0}
 
-            # Calculate the Einstein crossing time. (days)
-            #self_tE = (thetaE_amp / muRel_amp) * days_per_year
-
-            ## replotting the graph.. based on updated values..
+            # Caculate graph parameters based on updated values
             times = np.array(range(-time_steps, time_steps + 1, 1))
             tau = tE * times / (-times[0])
             t = t0 + (tau * self_tE)
             
             magnification = self.get_photometry(t, t0, self_tE, u0, thetaE_hat, piE_amp, b_sff, mag_src, raL, decL)
-            #get_amplification(self, t, t0=None, tE=None, u0=[], thetaE_hat=[], piE_amp=None, raL=None, decL=None):
-
             source = self.get_astrometry_unlensed(t, t0, xS0, muS, piS, raL, decL)
             ri = self.get_resolved_astrometry(t, t0, thetaS0, muRel, thetaE_amp, xL0, muL, piL, piRel, raL, decL)
             lens = self.get_lens_astrometry(t, t0, xL0, muL, piL, raL, decL)
@@ -3166,7 +3428,31 @@ class PSPL_GP_PhotAstromParam4(PSPL_PhotAstromParam4):
 # --------------------------------------------------
 class PSPL(ABC):
 
-    def display_sliders(self, params, update_func, range_dict, slider_step, n):
+    def display_sliders(self, params, update_func, range_dict, slider_step, format_n):
+        """ This function displays a slider for each parameter and calls a callback
+        function on the updated sliders' values.
+
+        Parameters
+        --------------
+        params:
+            list of parameters
+        update_func:
+            call-back function if a slider's value is changed
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+        slider_step:
+            default step size for the parameters' sliders
+        format_n:
+            max number of sliders in column, used in slider formatting
+
+        Returns
+        --------------
+        * box containing the UI for sliders, labels
+        * interactive_output
+        * list of sliders
+
+        """
 
         default_ranges = self.get_default_ranges(params)
 
@@ -3180,8 +3466,8 @@ class PSPL(ABC):
             range_dict.setdefault(param, (default_ranges[param][1], default_ranges[param][2])) #sets key to default if key not in range_dict
             curr_slider = widgets.FloatSlider(description=param, value=default_ranges[param][0], min=range_dict[param][0], max=range_dict[param][1], step = slider_step)
             sliders_list[param] = curr_slider
-            if param in self.default_priors:
-                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_priors[param][3])])
+            if param in self.default_ranges:
+                sliders_div_list[param] = widgets.HBox([curr_slider, widgets.Label(self.default_ranges[param][3])])
             else:
                 sliders_div_list[param] = widgets.HBox(curr_slider)
 
@@ -3191,7 +3477,7 @@ class PSPL(ABC):
         for i in range(len(params)):
             param = params[i]
             col_sliders_list.append(sliders_div_list[param])
-            if i % n == 0 : #6 sliders in a column
+            if i % format_n == 0 : # Ex: 6 sliders in a column
                 if i != 0:
                     ui_list.append(widgets.VBox(col_sliders_list))
                     col_sliders_list = []
@@ -3200,30 +3486,39 @@ class PSPL(ABC):
             ui_list.append(widgets.VBox(col_sliders_list))
         
         out = widgets.interactive_output(update_func, sliders_list)    
-        #display(widgets.HBox(ui_list), out)
+        # display(widgets.HBox(ui_list), out)
         
         return widgets.HBox(ui_list), out, sliders_list
 
-    def interact_display_Astrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+    def interact_display_Astrom(self, params, update_helper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Displays an interactive astrometry model of microlensing event.
+        This function sets up the figure and subplots, connecting the sliders to the plots.
+        
+        Parameters
+        --------------
+        params:
+            list of parameters
+        update_helper:
+            function used to produce calculations for the model
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
 
-        # times = np.array(range(-time_steps, time_steps + 1, 1))
-        # tau = tE * times / (-times[0])
-        # t = self.t0 + (tau * self.tE)
-        # A = self.get_photometry(t)
-        # rA = self.get_resolved_amplification(t)
-        # aplus = rA[0]
-        # aminus = rA[1]
-        # rs = self.get_astrometry_unlensed(t)
-        # ri = self.get_resolved_astrometry(t)
-        # plus = ri[0]
-        # minus = ri[1]
-        # l = self.get_lens_astrometry(t)
+        """
 
-        # Setup the alpha for the lensed source images.
-        # aplus_alpha = (0.5 * (aplus - 1) / (aplus.max() - 1)) + 0.5
-        # aminus_alpha = (0.5 * (aminus - 1) / (aplus.max() - 1)) + 0.5
-
-        # sets up the figure
+        # Set up the figure and plot
         fig = plt.figure(figsize=[size[0], size[1] + 0.5])
         ax1 = fig.add_subplot(1, 1, 1)
         fig.subplots_adjust(top=1, hspace = 0.25)
@@ -3245,21 +3540,9 @@ class PSPL(ABC):
         m_line2, = ax1.plot([], '-', markersize=size[0] * 0.3,
                             color='coral', linewidth=2)
 
-
-        # dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
         ax1.set_xlabel('RA (")')
         ax1.set_ylabel('Dec (")')
-        # ax1.set_xlim(
-        #     (l[0][0] + l[-1][0]) / 2 - 2 * (size[0]) / (2 * size[1]) * (
-        #             l[-1][1] - l[0][
-        #         1] + 2 * zoom * self.thetaE_amp * 1e-3),
-        #     (l[0][0] + l[-1][0]) / 2 + 2 * (size[0]) / (2 * size[1]) * (
-        #             l[-1][1] - l[0][
-        #         1] + 2 * zoom * self.thetaE_amp * 1e-3))
-        
-        # ax1.set_ylim(-dec_lim, dec_lim)
-            
-        # a = self.get_astrometry(t)
+
         u_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
                             color='red', linewidth=2,
                             label="Unresolved Astrometry")
@@ -3271,9 +3554,10 @@ class PSPL(ABC):
                 p_line1, p_line2, m_line1, m_line2,
                 u_line1, u_line2] 
 
+        # Used as a callback function for when a slider's value changes.
         def update(**kwargs):
-            
-            dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, derived_params = updateHelper(**kwargs)
+        
+            dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, derived_params = update_helper(**kwargs)
             i = len(tau)-1
             plus = ri[0]
             minus = ri[1]
@@ -3310,15 +3594,41 @@ class PSPL(ABC):
             dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
             ax1.set_ylim(-dec_lim, dec_lim)
 
-            # Derived parameters 
+            # Print derived parameters 
             print('\n')
-
             for param in derived_params.keys():
-                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
+                print(param,": ", derived_params[param], ' ', self.default_ranges[param][3])
 
         return self.display_sliders(params, update, range_dict, slider_step, 4)
 
     def interact_display_Phot(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Displays an interactive photometry model of microlensing event.
+        This function sets up the figure and subplots, connecting the sliders to the plots.
+        
+        Parameters
+        --------------
+        params:
+            list of parameters
+        update_helper:
+            function used to produce calculations for the model
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+            
+        """
+
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = tE * times / (-times[0])
         t = self.t0 + (tau * self.tE)
@@ -3341,6 +3651,7 @@ class PSPL(ABC):
 
         line = [mag_line] 
 
+        # Used as a callback function for when a slider's value changes.
         def update(**kwargs):
             
             tau, magnification, derived_params = updateHelper(**kwargs)
@@ -3361,11 +3672,37 @@ class PSPL(ABC):
             # Derived parameters
             print('\n')
             for param in derived_params.keys():
-                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
+                print(param,": ", derived_params[param], ' ', self.default_ranges[param][3])
 
         return self.display_sliders(params, update, range_dict, slider_step, 4)
 
     def interact_display_PhotAstrom(self, params, updateHelper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
+        """ Displays an interactive photometry and astrometry model of microlensing event.
+        This function sets up the figure and subplots, connecting the sliders to the plots.
+        
+        Parameters
+        --------------
+        params:
+            list of parameters
+        update_helper:
+            function used to produce calculations for the model
+        tE: 
+            number of einstein crossings times before/after the peak you want the animation to plot
+                e.g tE = 2 => graph will go from -2 tE to 2 tE
+        time_steps:
+            number of time steps before/after peak, so total number of time steps will 
+            be 2 times this value
+        size: list
+            [horizontal, vertical] cm's
+        zoom:
+            # of einstein radii plotted in vertical direction
+        slider_step:
+            default step size for the parameters' sliders
+        range_dict:
+            {param: (min_range, max_range)} Python dictionary containing mappings 
+            from parameters to default ranges
+            
+        """
 
         times = np.array(range(-time_steps, time_steps + 1, 1))
         tau = tE * times / (-times[0])
@@ -3420,7 +3757,6 @@ class PSPL(ABC):
         
         ax1.set_ylim(-dec_lim, dec_lim)
             
-        #a = self.get_astrometry(t)
         u_line1, = ax1.plot([], '.', markersize=size[0] * 1.3,
                             color='red', linewidth=2,
                             label="Unresolved Astrometry")
@@ -3436,16 +3772,13 @@ class PSPL(ABC):
                 p_line1, p_line2, m_line1, m_line2,
                 u_line1, u_line2, mag_line] 
 
+        # Used as a callback function for when a slider's value changes.
         def update(**kwargs):
             
             dL, dS, mL, thetaE_amp, source, lens, ri, astrometry, tau, magnification, derived_params = updateHelper(**kwargs)
             i = len(tau)-1
             plus = ri[0]
             minus = ri[1]
-            #dS = dL / dL_dS
-            #inv_dist_diff = (1.0 / (dL * units.pc)) - (1.0 / (dS * units.pc))
-            #thetaE = units.rad * np.sqrt((4.0 * const.G * mL * units.M_sun / const.c ** 2) * inv_dist_diff)
-            #thetaE_amp = thetaE.to('mas').value  # mas
 
             line[0].set_data(source[i, 0], source[i, 1])
             line[1].set_data(source[:i + 1, 0], source[:i + 1, 1])
@@ -3475,11 +3808,10 @@ class PSPL(ABC):
             dec_lim = 1.1 * np.max(np.abs(np.append(plus[:, 1], minus[:, 1])))
             ax1.set_ylim(-dec_lim, dec_lim)
 
-            # Derived parameters 
+            # Print derived parameters 
             print('\n')
-
             for param in derived_params.keys():
-                print(param,": ", derived_params[param], ' ', self.default_priors[param][3])
+                print(param,": ", derived_params[param], ' ', self.default_ranges[param][3])
 
         return self.display_sliders(params, update, range_dict, slider_step, 6)
 
