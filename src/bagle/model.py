@@ -353,7 +353,7 @@ solar_system_ephemeris.set('jpl')
 cache_dir = os.path.dirname(__file__) + '/parallax_cache/'
 cache_memory = Memory(cache_dir, verbose=0)
 
-
+out = widgets.Output()
 ######################################################
 ### POINT SOURCE POINT LENS (PSPL) CLASSES ###
 ######################################################
@@ -560,7 +560,7 @@ class PSPL_Param(ABC):
 
         # Figure out the default range of sliders
         default_ranges = self.default_ranges
-        default_ranges = {}
+        ranges = {}
         for param in params: # For each parameter
             if param in default_ranges.keys(): # Check if it has a default range
                 default_start = default_ranges[param][0] or 0
@@ -584,12 +584,12 @@ class PSPL_Param(ABC):
 
                     default_max = max(default_max, 0)
 
-                default_ranges[param] = (default_start, default_min, default_max)
+                ranges[param] = (default_start, default_min, default_max)
                 
             else:
-                default_ranges[param] = (0, 0, 0)
+                ranges[param] = (0, 0, 0)
 
-        return default_ranges
+        return ranges
 
     def get_params(self):
         return self.fitter_param_names + self.phot_param_names + ['raL', 'decL']
@@ -3490,6 +3490,7 @@ class PSPL(ABC):
         
         return widgets.HBox(ui_list), out, sliders_list
 
+    @out.capture()
     def interact_display_Astrom(self, params, update_helper, tE, time_steps, size, zoom, slider_step=0.1, range_dict=None):
         """ Displays an interactive astrometry model of microlensing event.
         This function sets up the figure and subplots, connecting the sliders to the plots.
@@ -3553,7 +3554,7 @@ class PSPL(ABC):
         line = [s_line1, s_line2, l_line1, l_line2,
                 p_line1, p_line2, m_line1, m_line2,
                 u_line1, u_line2] 
-
+        
         # Used as a callback function for when a slider's value changes.
         def update(**kwargs):
         
